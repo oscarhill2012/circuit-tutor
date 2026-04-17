@@ -1,0 +1,68 @@
+:root {
+  --bg: #0b1020;
+  --bg-2: #0f1629;
+  --panel: #131a2e;
+  --panel-2: #1a2440;
+  --line: #243154;
+  --text: #e6edf8;
+  --muted: #8a9bbd;
+  --accent: #2de2b3;        /* active current */
+  --accent-2: #ffcf5c;       /* voltage / warm */
+  --danger: #ff6b8a;
+  --info: #6fb3ff;
+  --violet: #b28cff;
+  --grid: #1a2440;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: radial-gradient(1200px 700px at 20% -10%, #182448 0%, var(--bg) 60%) fixed;
+  color: var(--text);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  overflow: hidden;
+}
+button { font-family: inherit; color: inherit; }
+
+/* SVG element styles */
+.grid-line { stroke: var(--grid); stroke-width: 0.5; }
+.terminal {
+  fill: #0b1020; stroke: var(--muted); stroke-width: 1.5;
+  transition: all 120ms;
+}
+.terminal.hit { fill: transparent; stroke: transparent; }
+.terminal.hover { stroke: var(--accent); fill: rgba(45,226,179,0.3); }
+.terminal.valid { stroke: var(--accent); fill: rgba(45,226,179,0.15); animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { r: 5; } 50% { r: 7; } }
+.wire { fill: none; stroke: #7a8bb0; stroke-width: 2.5; stroke-linecap: round; }
+.wire.active {
+  stroke: var(--accent);
+  stroke-dasharray: 6 10;
+  animation: flow 1s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(45,226,179,0.5));
+}
+.wire.reverse { animation-direction: reverse; }
+@keyframes flow { to { stroke-dashoffset: -16; } }
+.wire.preview { stroke: var(--accent); stroke-dasharray: 4 4; opacity: 0.8; }
+.wire.error { stroke: var(--danger); stroke-dasharray: 4 4; }
+.wire:hover { stroke: var(--info); cursor: pointer; }
+.comp text { font-family: 'JetBrains Mono', monospace; fill: var(--muted); font-size: 10px; }
+.comp .label { fill: var(--text); font-weight: 600; font-size: 11px; }
+.comp .val { fill: var(--accent-2); font-size: 10px; }
+.comp.selected .frame { stroke: var(--info); stroke-width: 2; fill: rgba(111,179,255,0.08); }
+.comp.error .body { stroke: var(--danger); }
+.comp.success .body { stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(45,226,179,0.4)); }
+.comp .body { stroke: #b9c4dc; stroke-width: 2; fill: none; }
+.comp .fill { fill: var(--bg-2); stroke: #b9c4dc; stroke-width: 2; }
+.comp .glow { fill: var(--accent-2); opacity: 0; }
+.vbar-bg { fill: #1a2440; }
+.vbar-fg { fill: var(--accent-2); }
+.ibar-fg { fill: var(--accent); }
+.label-float {
+  fill: var(--text); font-size: 10px; font-family: 'JetBrains Mono', monospace;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-track { background: transparent; }
