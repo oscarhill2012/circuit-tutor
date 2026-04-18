@@ -1,17 +1,65 @@
-// Canvas interaction: component drag, wire creation, terminal hit-testing.
-// Holds the small amount of transient editing state (hover/drag/preview).
+// Canvas interaction layer.
+//
+// Responsibilities:
+//   - Component drag (pointer down/move/up on a .comp group).
+//   - Terminal hit-testing for wire hover / click.
+//   - Forwarding semantic events (connector click, canvas click, Escape,
+//     pointer move) to the WireInteractionController.
+//
+// Routing, validation and state-machine logic live in wiring/*.
 
 import { state } from '../state/store.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
-import { render, svg, termPos, manhattanPath, routeWire } from './renderer.js';
+import { render, svg, routeWire, rerouteWiresFor, keyOfTerm } from './renderer.js';
 import { updateReadout } from '../ui/canvas.js';
+import { createValidator } from './wiring/validation.js';
+import { createWireInteractionController } from './wiring/controller.js';
 
 export const editor = {
   hoveredTerm: null,
-  dragging: null,  // {compId, offsetX, offsetY, moved, started}
-  draggingWaypoint: null, // {wid, widx}
-  previewEl: null, // set by renderer.render() when a pending wire exists
+  invalidHoverKey: null,
+  dragging: null,   // {compId, offsetX, offsetY, moved, started}
+  previewEl: null,  // set by renderer.render() for the pending preview wire
 };
+
+const validator = createValidator(() => state);
+
+const controller = createWireInteractionController({
+  validator,
+  onCommit(from, to) {
+    const path = routeWire(from, to, { excludeComps: [from.compId, to.compId] });
+    pushHistory();
+    const wire = {
+      id: 'W' + (state.nextId++),
+      a: from,
+      b: to,
+      path: path && path.length >= 2 ? path : null,
+    };
+    state.wires.push(wire);
+    simulate();
+    return wire.id;
+  },
+  onChange({ status, pending, invalidHover }) {
+    state.pendingWire = pending;
+    editor.invalidHoverKey = invalidHover ? keyOfTerm(invalidHover.compId, invalidHover.term) : null;
+    render();
+  },
+  onReject(port, reason) {
+    editor.invalidHoverKey = keyOfTerm(port.compId, port.term);
+    render();
+    if (reason === 'duplicate') flashInvalidHint();
+  },
+});
+
+export { controller as wireController };
+
+function flashInvalidHint() {
+  // Brief visual flash — handled entirely in CSS via the .invalid class we
+  // already apply. Clear it after a moment so the state recovers cleanly.
+  setTimeout(() => {
+    if (editor.invalidHoverKey) { editor.invalidHoverKey = null; render(); }
+  }, 500);
+}
 
 export function svgPoint(ev) {
   const pt = svg.createSVGPoint();
@@ -25,7 +73,10 @@ export function onCompMouseDown(ev, c) {
   if (state.tool !== 'select') return;
   ev.stopPropagation();
   const p = svgPoint(ev);
-  editor.dragging = { compId: c.id, offsetX: p.x - c.x, offsetY: p.y - c.y, moved: false, started: JSON.stringify(c) };
+  editor.dragging = {
+    compId: c.id, offsetX: p.x - c.x, offsetY: p.y - c.y,
+    moved: false, started: JSON.stringify(c),
+  };
   state.selectedId = c.id;
   render();
 }
@@ -34,47 +85,22 @@ export function onTerminalPointerDown(ev, compId, term) {
   if (state.tool === 'delete') {
     const before = state.wires.length;
     state.wires = state.wires.filter(w =>
-      !(w.a.compId===compId && w.a.term===term) &&
-      !(w.b.compId===compId && w.b.term===term));
+      !(w.a.compId === compId && w.a.term === term) &&
+      !(w.b.compId === compId && w.b.term === term));
     if (state.wires.length !== before) { pushHistory(); simulate(); render(); }
     return;
   }
-  // Click-to-click wiring: first click on a terminal starts a pending wire,
-  // second click on a different terminal finishes it (auto-routed).
-  if (state.pendingWire) {
-    const from = state.pendingWire.from;
-    // Clicking the same terminal (or its partner on the same component) cancels.
-    if (from.compId === compId && from.term === term) {
-      state.pendingWire = null;
-      render();
-      return;
-    }
-    const dup = state.wires.find(w =>
-      (w.a.compId===from.compId && w.a.term===from.term && w.b.compId===compId && w.b.term===term) ||
-      (w.b.compId===from.compId && w.b.term===from.term && w.a.compId===compId && w.a.term===term)
-    );
-    if (!dup) {
-      const ca = state.components.find(c => c.id === from.compId);
-      const cb = state.components.find(c => c.id === compId);
-      const via = ca && cb ? routeWire(termPos(ca, from.term), termPos(cb, term), [from.compId, compId]) : [];
-      pushHistory();
-      state.wires.push({ id: 'W' + (state.nextId++), a: from, b: { compId, term }, via });
-      simulate();
-    }
-    state.pendingWire = null;
-    render();
-    return;
-  }
-  const p = svgPoint(ev);
-  state.pendingWire = { from: { compId, term }, mouseX: p.x, mouseY: p.y };
-  render();
+  const pt = svgPoint(ev);
+  controller.onConnectorClick({ compId, term }, pt);
 }
 
 export function findTerminalAtClient(clientX, clientY) {
-  // Hide preview so it doesn't intercept hit-testing, then query element under pointer.
   const hadPreview = !!editor.previewEl;
   let prevPE = null;
-  if (hadPreview) { prevPE = editor.previewEl.getAttribute('pointer-events'); editor.previewEl.setAttribute('pointer-events', 'none'); }
+  if (hadPreview) {
+    prevPE = editor.previewEl.getAttribute('pointer-events');
+    editor.previewEl.setAttribute('pointer-events', 'none');
+  }
   const el = document.elementFromPoint(clientX, clientY);
   if (hadPreview) {
     if (prevPE === null) editor.previewEl.removeAttribute('pointer-events');
@@ -88,37 +114,32 @@ export function findTerminalAtClient(clientX, clientY) {
 
 export function updateWireHoverTarget(clientX, clientY) {
   const tgt = findTerminalAtClient(clientX, clientY);
-  const tgtKey = tgt ? (tgt.compId + '.' + tgt.term) : null;
-  if (tgtKey === editor.hoveredTerm) return;
+  const tgtKey = tgt ? keyOfTerm(tgt.compId, tgt.term) : null;
+  if (tgtKey === editor.hoveredTerm) {
+    controller.onHoverTarget(tgt);
+    return;
+  }
   editor.hoveredTerm = tgtKey;
-  // Adjust classes directly to avoid a full SVG rebuild.
+  // Adjust classes directly to avoid a full SVG rebuild on every pointermove.
   document.querySelectorAll('#canvas .terminal').forEach(el => {
     if (el.classList.contains('hit')) return;
     el.classList.remove('hover');
   });
   if (tgt) {
-    const hit = document.querySelector('.terminal.hit[data-comp="' + tgt.compId + '"][data-tname="' + tgt.term + '"]');
+    const hit = document.querySelector(
+      '.terminal.hit[data-comp="' + tgt.compId + '"][data-tname="' + tgt.term + '"]'
+    );
     if (hit) {
       const visible = hit.previousElementSibling;
       if (visible && visible.classList.contains('terminal')) visible.classList.add('hover');
     }
   }
+  controller.onHoverTarget(tgt);
 }
 
-// Register canvas-level pointer handlers. Called once during boot.
 export function initCanvasInteractions() {
   svg.addEventListener('pointermove', (ev) => {
     const p = svgPoint(ev);
-    if (editor.draggingWaypoint) {
-      const { wid, widx } = editor.draggingWaypoint;
-      const w = state.wires.find(ww => ww.id === wid);
-      if (w && w.via && w.via[widx]) {
-        w.via[widx].x = snap(p.x);
-        w.via[widx].y = snap(p.y);
-        render();
-      }
-      return;
-    }
     if (editor.dragging) {
       const c = state.components.find(x => x.id === editor.dragging.compId);
       if (c) {
@@ -130,38 +151,29 @@ export function initCanvasInteractions() {
       return;
     }
     if (state.pendingWire) {
-      state.pendingWire.mouseX = p.x;
-      state.pendingWire.mouseY = p.y;
-      if (editor.previewEl) {
-        const ca = state.components.find(c => c.id === state.pendingWire.from.compId);
-        if (ca) {
-          const p1 = termPos(ca, state.pendingWire.from.term);
-          editor.previewEl.setAttribute('d', manhattanPath(p1, p));
-        }
-      }
+      controller.onPointerMove(p);
       updateWireHoverTarget(ev.clientX, ev.clientY);
     }
   });
 
   svg.addEventListener('pointerup', (ev) => {
-    if (editor.draggingWaypoint) {
-      editor.draggingWaypoint = null;
-      try { svg.releasePointerCapture(ev.pointerId); } catch (_) {}
-      return;
-    }
     if (editor.dragging) {
-      if (editor.dragging.moved) { pushHistory(); simulate(); render(); }
+      if (editor.dragging.moved) {
+        pushHistory();
+        rerouteWiresFor([editor.dragging.compId]);
+        simulate();
+        render();
+      }
       editor.dragging = null;
       return;
     }
-    // Clicking the empty canvas cancels a pending wire and clears selection.
+    // Clicking empty canvas cancels any pending wire and clears selection.
     const t = ev.target;
     const isBg = t === svg || (t.classList && t.classList.contains('grid-line'));
     if (isBg) {
       if (state.pendingWire) {
-        state.pendingWire = null;
+        controller.onCanvasClick();
         editor.hoveredTerm = null;
-        render();
         return;
       }
       state.selectedId = null;
@@ -173,14 +185,13 @@ export function initCanvasInteractions() {
   svg.addEventListener('pointercancel', () => {
     editor.dragging = null;
     editor.hoveredTerm = null;
-    render();
+    controller.reset();
   });
 
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && state.pendingWire) {
-      state.pendingWire = null;
+    if (ev.key === 'Escape') {
+      controller.onEscape();
       editor.hoveredTerm = null;
-      render();
     }
   });
 }

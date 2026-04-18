@@ -80,24 +80,6 @@ export function deleteWire(wid) {
   simulate(); render();
 }
 
-export function removeWireWaypoint(wid, idx) {
-  const w = state.wires.find(ww => ww.id === wid);
-  if (!w || !w.via) return;
-  pushHistory();
-  w.via.splice(idx, 1);
-  render();
-}
-
-export function addWireWaypoint(wid, x, y) {
-  const w = state.wires.find(ww => ww.id === wid);
-  if (!w) return;
-  pushHistory();
-  if (!w.via) w.via = [];
-  // Insert at the nearest segment so waypoints remain in route order.
-  w.via.push({ x: snap(x), y: snap(y) });
-  render();
-}
-
 export function addComponent(type, x, y) {
   pushHistory();
   const id = uid(type);

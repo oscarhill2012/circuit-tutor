@@ -5,8 +5,13 @@
 import { state, SVG_W, SVG_H, EPS } from '../state/store.js';
 import { COMP } from './schema.js';
 import { editor, onCompMouseDown, onTerminalPointerDown } from './editor.js';
-import { deleteWire, deleteComponent, addWireWaypoint, removeWireWaypoint } from '../state/actions.js';
+import { deleteWire, deleteComponent } from '../state/actions.js';
 import { updateHUD, updateReadout } from '../ui/canvas.js';
+import { termPos } from './geometry.js';
+import { route as routePath } from './wiring/router.js';
+import { toSvgPath, previewPath } from './wiring/path.js';
+
+export { termPos };
 
 export const svg = document.getElementById('canvas');
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -32,164 +37,80 @@ export function svgEl(tag, attrs, ...children) {
   return e;
 }
 
-// terminal world position
-export function termPos(comp, termName) {
-  const def = COMP[comp.type].terms.find(t => t.n === termName);
-  return { x: comp.x + def.x, y: comp.y + def.y };
-}
-
 export function keyOfTerm(cid, tn) { return cid + '.' + tn; }
 
-// Route a single orthogonal segment p → q. Picks whether to go horizontal-
-// first or vertical-first so the elbow sits in the middle rather than always
-// at the top-right corner of the bounding box.
-function segmentPath(p, q, horizontalFirst) {
-  const dx = q.x - p.x, dy = q.y - p.y;
-  if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return `L ${q.x} ${q.y}`;
-  if (Math.abs(dx) < 1 || Math.abs(dy) < 1) return `L ${q.x} ${q.y}`;
-  if (horizontalFirst) {
-    const mx = p.x + dx / 2;
-    return `L ${mx} ${p.y} L ${mx} ${q.y} L ${q.x} ${q.y}`;
-  } else {
-    const my = p.y + dy / 2;
-    return `L ${p.x} ${my} L ${q.x} ${my} L ${q.x} ${q.y}`;
-  }
+// Routing is delegated to RouterService; rendering is delegated to
+// wiring/path. These helpers just expose the shape legacy callers expect.
+
+// Backwards-compat: build an SVG `d` for a pending-wire preview.
+export function manhattanPath(a, b) { return previewPath(a, b); }
+
+// Thin shim used by editor.js when a wire is committed. Returns the full
+// routed path (including endpoints) so the wire can cache it on the model.
+export function routeWire(source, target, opts = {}) {
+  return routePath(source, target, opts);
 }
 
-// Full wire path through optional waypoints. Each segment's orientation is
-// picked independently so the wire takes a natural looping route instead of
-// always snapping to one corner of the bounding box.
-export function wirePath(a, b, via = []) {
-  const pts = [a, ...(via || []), b];
-  let d = `M ${a.x} ${a.y}`;
-  for (let i = 1; i < pts.length; i++) {
-    const p = pts[i - 1], q = pts[i];
-    const dx = q.x - p.x, dy = q.y - p.y;
-    // Prefer to emerge along the axis of the larger delta first — keeps the
-    // long run away from the terminals they emerge from.
-    const horizontalFirst = Math.abs(dx) >= Math.abs(dy);
-    d += ' ' + segmentPath(p, q, horizontalFirst);
-  }
-  return d;
-}
-
-// Backwards-compat alias still used by the preview wire.
-export function manhattanPath(a, b) { return wirePath(a, b, []); }
-
-// ---- Auto-routing for newly drawn wires ---------------------------------
-// Generate a handful of orthogonal candidate routes and pick the one that
-// least collides with component bodies and existing wires. Returned array is
-// the list of corner waypoints (suitable for `wire.via`) between a and b.
-function segIntersectsBox(p, q, box) {
-  if (p.x === q.x) {
-    if (p.x < box.x1 || p.x > box.x2) return false;
-    const sy = Math.min(p.y, q.y), ey = Math.max(p.y, q.y);
-    return !(ey < box.y1 || sy > box.y2);
-  }
-  if (p.y === q.y) {
-    if (p.y < box.y1 || p.y > box.y2) return false;
-    const sx = Math.min(p.x, q.x), ex = Math.max(p.x, q.x);
-    return !(ex < box.x1 || sx > box.x2);
-  }
-  return false;
-}
-
-function segsCross(p, q, r, s) {
-  // axis-aligned only: one H and one V means a single point crossing
-  if (p.x === q.x && r.y === s.y) {
-    const vx = p.x, vy1 = Math.min(p.y, q.y), vy2 = Math.max(p.y, q.y);
-    const hy = r.y, hx1 = Math.min(r.x, s.x), hx2 = Math.max(r.x, s.x);
-    return vx >= hx1 && vx <= hx2 && hy >= vy1 && hy <= vy2;
-  }
-  if (p.y === q.y && r.x === s.x) return segsCross(r, s, p, q);
-  // parallel overlap
-  if (p.x === q.x && r.x === s.x && p.x === r.x) {
-    const a1 = Math.min(p.y, q.y), a2 = Math.max(p.y, q.y);
-    const b1 = Math.min(r.y, s.y), b2 = Math.max(r.y, s.y);
-    return !(a2 < b1 || b2 < a1);
-  }
-  if (p.y === q.y && r.y === s.y && p.y === r.y) {
-    const a1 = Math.min(p.x, q.x), a2 = Math.max(p.x, q.x);
-    const b1 = Math.min(r.x, s.x), b2 = Math.max(r.x, s.x);
-    return !(a2 < b1 || b2 < a1);
-  }
-  return false;
-}
-
-function collectObstacles(excludeCompIds) {
-  const boxes = [];
-  for (const c of state.components) {
-    if (excludeCompIds.has(c.id)) continue;
-    const box = COMP[c.type];
-    boxes.push({
-      x1: c.x - box.w / 2 - 2, x2: c.x + box.w / 2 + 2,
-      y1: c.y - box.h / 2 - 2, y2: c.y + box.h / 2 + 2,
+// Pull the committed path for a wire, routing and caching on demand.
+export function resolveWirePath(w) {
+  const ca = state.components.find(c => c.id === w.a.compId);
+  const cb = state.components.find(c => c.id === w.b.compId);
+  if (!ca || !cb) return null;
+  const p0 = termPos(ca, w.a.term);
+  const pn = termPos(cb, w.b.term);
+  const cached = w.path;
+  const endpointsMoved = !cached || cached.length < 2 ||
+    !near(cached[0], p0) || !near(cached[cached.length - 1], pn);
+  if (endpointsMoved) {
+    const next = routePath(w.a, w.b, {
+      excludeComps: [w.a.compId, w.b.compId],
+      excludeWires: [w.id],
+      previousPath: cached,
     });
-  }
-  const segs = [];
-  for (const w of state.wires) {
-    const ca = state.components.find(c => c.id === w.a.compId);
-    const cb = state.components.find(c => c.id === w.b.compId);
-    if (!ca || !cb) continue;
-    const pts = [termPos(ca, w.a.term), ...((w.via) || []), termPos(cb, w.b.term)];
-    // Snap to orthogonal corners using the same mid-point logic as wirePath
-    const corners = [pts[0]];
-    for (let i = 1; i < pts.length; i++) {
-      const p = corners[corners.length - 1], q = pts[i];
-      if (p.x !== q.x && p.y !== q.y) {
-        const dx = q.x - p.x, dy = q.y - p.y;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          const mx = p.x + dx / 2;
-          corners.push({ x: mx, y: p.y }, { x: mx, y: q.y });
-        } else {
-          const my = p.y + dy / 2;
-          corners.push({ x: p.x, y: my }, { x: q.x, y: my });
-        }
-      }
-      corners.push(q);
+    if (next && next.length >= 2) {
+      w.path = next;
+      return next;
     }
-    for (let i = 1; i < corners.length; i++) segs.push({ p: corners[i-1], q: corners[i] });
+    // Fallback: two-segment preview keeps endpoints correct even if routing
+    // fails for some reason.
+    return [p0, { x: pn.x, y: p0.y }, pn];
   }
-  return { boxes, segs };
+  return cached;
 }
 
-function scoreRoute(points, boxes, segs) {
-  let score = 0, len = 0;
-  for (let i = 1; i < points.length; i++) {
-    const p = points[i-1], q = points[i];
-    len += Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
-    for (const bb of boxes) if (segIntersectsBox(p, q, bb)) score += 10000;
-    for (const s of segs) if (segsCross(p, q, s.p, s.q)) score += 200;
-  }
-  return score + len;
+function near(a, b) {
+  return Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
 }
 
-export function routeWire(a, b, excludeCompIds) {
-  const { boxes, segs } = collectObstacles(new Set(excludeCompIds));
-  const cands = [];
-  const push = (pts) => cands.push(pts);
-  push([a, { x: b.x, y: a.y }, b]);
-  push([a, { x: a.x, y: b.y }, b]);
-  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-  push([a, { x: mx, y: a.y }, { x: mx, y: b.y }, b]);
-  push([a, { x: a.x, y: my }, { x: b.x, y: my }, b]);
-  if (boxes.length) {
-    const pad = 24;
-    const minY = Math.min(...boxes.map(bb => bb.y1)) - pad;
-    const maxY = Math.max(...boxes.map(bb => bb.y2)) + pad;
-    const minX = Math.min(...boxes.map(bb => bb.x1)) - pad;
-    const maxX = Math.max(...boxes.map(bb => bb.x2)) + pad;
-    push([a, { x: a.x, y: minY }, { x: b.x, y: minY }, b]);
-    push([a, { x: a.x, y: maxY }, { x: b.x, y: maxY }, b]);
-    push([a, { x: minX, y: a.y }, { x: minX, y: b.y }, b]);
-    push([a, { x: maxX, y: a.y }, { x: maxX, y: b.y }, b]);
+// While a component is being dragged, draw a cheap two-segment Manhattan
+// path for wires attached to it instead of calling the full router on every
+// pointermove.
+function dragPreviewPts(w, draggingCompId) {
+  const ca = state.components.find(c => c.id === w.a.compId);
+  const cb = state.components.find(c => c.id === w.b.compId);
+  if (!ca || !cb) return null;
+  const p0 = termPos(ca, w.a.term);
+  const pn = termPos(cb, w.b.term);
+  const dx = pn.x - p0.x, dy = pn.y - p0.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return [p0, { x: p0.x + dx / 2, y: p0.y }, { x: p0.x + dx / 2, y: pn.y }, pn];
   }
-  let best = cands[0], bestS = scoreRoute(cands[0], boxes, segs);
-  for (const c of cands) {
-    const s = scoreRoute(c, boxes, segs);
-    if (s < bestS) { bestS = s; best = c; }
+  return [p0, { x: p0.x, y: p0.y + dy / 2 }, { x: pn.x, y: p0.y + dy / 2 }, pn];
+}
+
+// Reroute wires that touch any of the given components. Called from the
+// editor after a drag finishes so only affected wires move.
+export function rerouteWiresFor(componentIds) {
+  const touched = new Set(componentIds);
+  for (const w of state.wires) {
+    if (!touched.has(w.a.compId) && !touched.has(w.b.compId)) continue;
+    const next = routePath(w.a, w.b, {
+      excludeComps: [w.a.compId, w.b.compId],
+      excludeWires: [w.id],
+      previousPath: w.path,
+    });
+    if (next && next.length >= 2) w.path = next;
   }
-  return best.slice(1, -1);
 }
 
 export function checkMeterPlacement(meter) {
@@ -218,56 +139,33 @@ export function render() {
 
   // Render wires (before components so they are below)
   const wiresG = svgEl('g', { class: 'wires' });
+  const draggingComp = editor.dragging ? editor.dragging.compId : null;
   for (const w of state.wires) {
-    const ca = state.components.find(c=>c.id===w.a.compId);
-    const cb = state.components.find(c=>c.id===w.b.compId);
-    if (!ca || !cb) continue;
-    const p1 = termPos(ca, w.a.term);
-    const p2 = termPos(cb, w.b.term);
-    const d = wirePath(p1, p2, w.via || []);
+    const pts = resolveWirePath(w);
+    if (!pts) continue;
+    // During a drag, show a transient preview from the current endpoints so
+    // the wire tracks the component in real time without a full reroute.
+    const isLive = draggingComp && (w.a.compId === draggingComp || w.b.compId === draggingComp);
+    const drawPts = isLive ? dragPreviewPts(w, draggingComp) : pts;
     let cls = 'wire';
+    if (state.selectedId === 'wire:' + w.id) cls += ' selected';
     if (state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen && state.toggles.current) {
       const nodeA = state.sim.getNode(w.a.compId, w.a.term);
-      const nodeB = state.sim.getNode(w.b.compId, w.b.term);
       const anyCurrent = state.sim.elements.some(e => (e.na===nodeA||e.nb===nodeA) && Math.abs(e.current) > 1e-4);
-      if (anyCurrent) cls = 'wire active';
+      if (anyCurrent) cls += ' active';
     }
     const path = svgEl('path', {
-      class: cls, d,
+      class: cls, d: toSvgPath(drawPts),
       'data-wid': w.id,
       onclick: (ev) => {
         ev.stopPropagation();
         if (state.tool === 'delete') { deleteWire(w.id); return; }
-        // Click anywhere on the wire (not on a terminal) adds a detour waypoint
-        // so the user can force the wire to loop around other components.
-        const pt = svgPointFromEvent(ev);
-        if (pt) addWireWaypoint(w.id, pt.x, pt.y);
         state.selectedId = 'wire:' + w.id;
         render();
         updateReadout();
       },
     });
     wiresG.appendChild(path);
-    // Draggable handles for existing waypoints
-    if (w.via && w.via.length) {
-      for (let wi = 0; wi < w.via.length; wi++) {
-        const wp = w.via[wi];
-        const widx = wi, wid = w.id;
-        wiresG.appendChild(svgEl('circle', {
-          class: 'wire-waypoint', cx: wp.x, cy: wp.y, r: 5,
-          'data-wid': wid, 'data-widx': widx,
-          onpointerdown: (ev) => {
-            ev.stopPropagation();
-            if (state.tool === 'delete') {
-              removeWireWaypoint(wid, widx);
-              return;
-            }
-            editor.draggingWaypoint = { wid, widx };
-            try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
-          },
-        }));
-      }
-    }
   }
   svg.appendChild(wiresG);
 
@@ -276,17 +174,22 @@ export function render() {
   for (const c of state.components) compsG.appendChild(renderComponent(c));
   svg.appendChild(compsG);
 
-  // Terminal hit areas
+  // Terminal hit areas with explicit connector visual states.
   const termG = svgEl('g', { class: 'terms' });
+  const pending = state.pendingWire;
+  const invalid = editor.invalidHoverKey;
   for (const c of state.components) {
     for (const t of COMP[c.type].terms) {
       const p = termPos(c, t.n);
       const k = keyOfTerm(c.id, t.n);
-      const isHovered = editor.hoveredTerm === k;
-      const isPending = state.pendingWire && state.pendingWire.from.compId === c.id && state.pendingWire.from.term === t.n;
-      const isValidTarget = state.pendingWire && !isPending;
+      const isActiveSource = pending && pending.from.compId === c.id && pending.from.term === t.n;
+      const isHovered = editor.hoveredTerm === k && !isActiveSource;
+      const isInvalid = invalid === k;
+      const isValidTarget = pending && !isActiveSource && !isInvalid;
       let cls = 'terminal';
-      if (isHovered) cls += ' hover';
+      if (isActiveSource) cls += ' source';
+      else if (isInvalid) cls += ' invalid';
+      else if (isHovered) cls += ' hover';
       else if (isValidTarget) cls += ' valid';
       termG.appendChild(svgEl('circle', { class: cls, cx: p.x, cy: p.y, r: 4 }));
       termG.appendChild(svgEl('circle', {
