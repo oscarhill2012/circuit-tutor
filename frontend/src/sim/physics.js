@@ -6,10 +6,15 @@
 // AI's grounding context can't be spoofed by a tampered client.
 
 (function () {
-  const AMMETER_R = 0.01;       // ideal ammeter ≈ 0 Ω; small nonzero for solver stability
-  const VOLTMETER_R = 1e9;      // ideal voltmeter ≈ ∞ Ω
+  // Ideal-meter defaults. Exposed as window.Physics.settings so a later
+  // "what if meters aren't ideal?" extension task can override these from the UI.
+  // Near-ideal rather than exactly 0 / ∞ keeps the MNA solver well-conditioned.
+  const settings = {
+    ammeterR: 1e-4,       // ideal ammeter ≈ 0 Ω
+    voltmeterR: 1e8,      // ideal voltmeter ≈ ∞ Ω
+    cellInternalR: 1e-4,  // ideal source ≈ 0 Ω internal
+  };
   const MIN_LOAD_R = 0.5;        // minimum allowed bulb/resistor R (prevents runaway currents)
-  const CELL_INTERNAL_R = 0.1;  // small internal resistance so a cell never delivers infinite current
   const SHORT_CIRCUIT_I = 50;   // A — above this we flag a short and clamp display
 
   // ---- MNA solver ------------------------------------------------------
@@ -70,9 +75,9 @@
       } else if (c.type === 'bulb' || c.type === 'resistor') {
         elems.push({ kind: 'R', comp: c, na: getNode(c.id, 'a'), nb: getNode(c.id, 'b'), value: Math.max(MIN_LOAD_R, c.props.resistance) });
       } else if (c.type === 'ammeter') {
-        elems.push({ kind: 'R', comp: c, na: getNode(c.id, 'a'), nb: getNode(c.id, 'b'), value: AMMETER_R });
+        elems.push({ kind: 'R', comp: c, na: getNode(c.id, 'a'), nb: getNode(c.id, 'b'), value: Math.max(1e-12, settings.ammeterR) });
       } else if (c.type === 'voltmeter') {
-        elems.push({ kind: 'R', comp: c, na: getNode(c.id, 'a'), nb: getNode(c.id, 'b'), value: VOLTMETER_R });
+        elems.push({ kind: 'R', comp: c, na: getNode(c.id, 'a'), nb: getNode(c.id, 'b'), value: Math.max(1, settings.voltmeterR) });
       }
     }
 
@@ -106,7 +111,7 @@
       if (a !== gnd) { A[a][idx] += 1; A[idx][a] += 1; }
       if (b !== gnd) { A[b][idx] -= 1; A[idx][b] -= 1; }
       // V_a - V_b - R_int * I_source = V_value (small internal resistance)
-      A[idx][idx] -= CELL_INTERNAL_R;
+      A[idx][idx] -= settings.cellInternalR;
       z[idx] = e.value;
     });
     for (let j = 0; j < M; j++) { A[gnd][j] = 0; A[j][gnd] = 0; }
@@ -176,5 +181,5 @@
     return 'series';
   }
 
-  window.Physics = { simulate, topologyGuess, AMMETER_R, VOLTMETER_R };
+  window.Physics = { simulate, topologyGuess, settings };
 })();

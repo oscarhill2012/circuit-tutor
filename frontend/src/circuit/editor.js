@@ -3,7 +3,7 @@
 
 import { state } from '../state/store.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
-import { render, svg, termPos, manhattanPath } from './renderer.js';
+import { render, svg, termPos, manhattanPath, routeWire } from './renderer.js';
 import { updateReadout } from '../ui/canvas.js';
 
 export const editor = {
@@ -39,9 +39,34 @@ export function onTerminalPointerDown(ev, compId, term) {
     if (state.wires.length !== before) { pushHistory(); simulate(); render(); }
     return;
   }
+  // Click-to-click wiring: first click on a terminal starts a pending wire,
+  // second click on a different terminal finishes it (auto-routed).
+  if (state.pendingWire) {
+    const from = state.pendingWire.from;
+    // Clicking the same terminal (or its partner on the same component) cancels.
+    if (from.compId === compId && from.term === term) {
+      state.pendingWire = null;
+      render();
+      return;
+    }
+    const dup = state.wires.find(w =>
+      (w.a.compId===from.compId && w.a.term===from.term && w.b.compId===compId && w.b.term===term) ||
+      (w.b.compId===from.compId && w.b.term===from.term && w.a.compId===compId && w.a.term===term)
+    );
+    if (!dup) {
+      const ca = state.components.find(c => c.id === from.compId);
+      const cb = state.components.find(c => c.id === compId);
+      const via = ca && cb ? routeWire(termPos(ca, from.term), termPos(cb, term), [from.compId, compId]) : [];
+      pushHistory();
+      state.wires.push({ id: 'W' + (state.nextId++), a: from, b: { compId, term }, via });
+      simulate();
+    }
+    state.pendingWire = null;
+    render();
+    return;
+  }
   const p = svgPoint(ev);
   state.pendingWire = { from: { compId, term }, mouseX: p.x, mouseY: p.y };
-  try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
   render();
 }
 
@@ -129,27 +154,16 @@ export function initCanvasInteractions() {
       editor.dragging = null;
       return;
     }
-    if (state.pendingWire) {
-      const from = state.pendingWire.from;
-      const tgt = findTerminalAtClient(ev.clientX, ev.clientY);
-      state.pendingWire = null;
-      if (tgt && !(tgt.compId === from.compId && tgt.term === from.term)) {
-        const dup = state.wires.find(w =>
-          (w.a.compId===from.compId && w.a.term===from.term && w.b.compId===tgt.compId && w.b.term===tgt.term) ||
-          (w.b.compId===from.compId && w.b.term===from.term && w.a.compId===tgt.compId && w.a.term===tgt.term)
-        );
-        if (!dup) {
-          pushHistory();
-          state.wires.push({ id: 'W' + (state.nextId++), a: from, b: { compId: tgt.compId, term: tgt.term } });
-          simulate();
-        }
+    // Clicking the empty canvas cancels a pending wire and clears selection.
+    const t = ev.target;
+    const isBg = t === svg || (t.classList && t.classList.contains('grid-line'));
+    if (isBg) {
+      if (state.pendingWire) {
+        state.pendingWire = null;
+        editor.hoveredTerm = null;
+        render();
+        return;
       }
-      try { svg.releasePointerCapture(ev.pointerId); } catch (_) {}
-      editor.hoveredTerm = null;
-      render();
-      return;
-    }
-    if (ev.target === svg) {
       state.selectedId = null;
       render();
       updateReadout();
@@ -157,9 +171,16 @@ export function initCanvasInteractions() {
   });
 
   svg.addEventListener('pointercancel', () => {
-    state.pendingWire = null;
     editor.dragging = null;
     editor.hoveredTerm = null;
     render();
+  });
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && state.pendingWire) {
+      state.pendingWire = null;
+      editor.hoveredTerm = null;
+      render();
+    }
   });
 }

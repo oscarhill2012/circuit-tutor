@@ -76,6 +76,122 @@ export function wirePath(a, b, via = []) {
 // Backwards-compat alias still used by the preview wire.
 export function manhattanPath(a, b) { return wirePath(a, b, []); }
 
+// ---- Auto-routing for newly drawn wires ---------------------------------
+// Generate a handful of orthogonal candidate routes and pick the one that
+// least collides with component bodies and existing wires. Returned array is
+// the list of corner waypoints (suitable for `wire.via`) between a and b.
+function segIntersectsBox(p, q, box) {
+  if (p.x === q.x) {
+    if (p.x < box.x1 || p.x > box.x2) return false;
+    const sy = Math.min(p.y, q.y), ey = Math.max(p.y, q.y);
+    return !(ey < box.y1 || sy > box.y2);
+  }
+  if (p.y === q.y) {
+    if (p.y < box.y1 || p.y > box.y2) return false;
+    const sx = Math.min(p.x, q.x), ex = Math.max(p.x, q.x);
+    return !(ex < box.x1 || sx > box.x2);
+  }
+  return false;
+}
+
+function segsCross(p, q, r, s) {
+  // axis-aligned only: one H and one V means a single point crossing
+  if (p.x === q.x && r.y === s.y) {
+    const vx = p.x, vy1 = Math.min(p.y, q.y), vy2 = Math.max(p.y, q.y);
+    const hy = r.y, hx1 = Math.min(r.x, s.x), hx2 = Math.max(r.x, s.x);
+    return vx >= hx1 && vx <= hx2 && hy >= vy1 && hy <= vy2;
+  }
+  if (p.y === q.y && r.x === s.x) return segsCross(r, s, p, q);
+  // parallel overlap
+  if (p.x === q.x && r.x === s.x && p.x === r.x) {
+    const a1 = Math.min(p.y, q.y), a2 = Math.max(p.y, q.y);
+    const b1 = Math.min(r.y, s.y), b2 = Math.max(r.y, s.y);
+    return !(a2 < b1 || b2 < a1);
+  }
+  if (p.y === q.y && r.y === s.y && p.y === r.y) {
+    const a1 = Math.min(p.x, q.x), a2 = Math.max(p.x, q.x);
+    const b1 = Math.min(r.x, s.x), b2 = Math.max(r.x, s.x);
+    return !(a2 < b1 || b2 < a1);
+  }
+  return false;
+}
+
+function collectObstacles(excludeCompIds) {
+  const boxes = [];
+  for (const c of state.components) {
+    if (excludeCompIds.has(c.id)) continue;
+    const box = COMP[c.type];
+    boxes.push({
+      x1: c.x - box.w / 2 - 2, x2: c.x + box.w / 2 + 2,
+      y1: c.y - box.h / 2 - 2, y2: c.y + box.h / 2 + 2,
+    });
+  }
+  const segs = [];
+  for (const w of state.wires) {
+    const ca = state.components.find(c => c.id === w.a.compId);
+    const cb = state.components.find(c => c.id === w.b.compId);
+    if (!ca || !cb) continue;
+    const pts = [termPos(ca, w.a.term), ...((w.via) || []), termPos(cb, w.b.term)];
+    // Snap to orthogonal corners using the same mid-point logic as wirePath
+    const corners = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const p = corners[corners.length - 1], q = pts[i];
+      if (p.x !== q.x && p.y !== q.y) {
+        const dx = q.x - p.x, dy = q.y - p.y;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          const mx = p.x + dx / 2;
+          corners.push({ x: mx, y: p.y }, { x: mx, y: q.y });
+        } else {
+          const my = p.y + dy / 2;
+          corners.push({ x: p.x, y: my }, { x: q.x, y: my });
+        }
+      }
+      corners.push(q);
+    }
+    for (let i = 1; i < corners.length; i++) segs.push({ p: corners[i-1], q: corners[i] });
+  }
+  return { boxes, segs };
+}
+
+function scoreRoute(points, boxes, segs) {
+  let score = 0, len = 0;
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i-1], q = points[i];
+    len += Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
+    for (const bb of boxes) if (segIntersectsBox(p, q, bb)) score += 10000;
+    for (const s of segs) if (segsCross(p, q, s.p, s.q)) score += 200;
+  }
+  return score + len;
+}
+
+export function routeWire(a, b, excludeCompIds) {
+  const { boxes, segs } = collectObstacles(new Set(excludeCompIds));
+  const cands = [];
+  const push = (pts) => cands.push(pts);
+  push([a, { x: b.x, y: a.y }, b]);
+  push([a, { x: a.x, y: b.y }, b]);
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  push([a, { x: mx, y: a.y }, { x: mx, y: b.y }, b]);
+  push([a, { x: a.x, y: my }, { x: b.x, y: my }, b]);
+  if (boxes.length) {
+    const pad = 24;
+    const minY = Math.min(...boxes.map(bb => bb.y1)) - pad;
+    const maxY = Math.max(...boxes.map(bb => bb.y2)) + pad;
+    const minX = Math.min(...boxes.map(bb => bb.x1)) - pad;
+    const maxX = Math.max(...boxes.map(bb => bb.x2)) + pad;
+    push([a, { x: a.x, y: minY }, { x: b.x, y: minY }, b]);
+    push([a, { x: a.x, y: maxY }, { x: b.x, y: maxY }, b]);
+    push([a, { x: minX, y: a.y }, { x: minX, y: b.y }, b]);
+    push([a, { x: maxX, y: a.y }, { x: maxX, y: b.y }, b]);
+  }
+  let best = cands[0], bestS = scoreRoute(cands[0], boxes, segs);
+  for (const c of cands) {
+    const s = scoreRoute(c, boxes, segs);
+    if (s < bestS) { bestS = s; best = c; }
+  }
+  return best.slice(1, -1);
+}
+
 export function checkMeterPlacement(meter) {
   // Warn if ammeter has voltmeter placement (no current through it means maybe in parallel as bypass) —
   // Simplification: warn if ammeter current == 0 while circuit is live, or voltmeter has significant current.
@@ -197,6 +313,7 @@ export function render() {
   }
 
   updateHUD();
+  updateReadout();
 }
 
 export function renderComponent(c) {
@@ -233,7 +350,7 @@ export function renderComponent(c) {
     if (state.toggles.labels) {
       g.appendChild(svgEl('text', { x:-w/2+4, y:-16, class:'label' }, '+'));
       g.appendChild(svgEl('text', { x:w/2-10, y:-16, class:'label' }, '−'));
-      g.appendChild(svgEl('text', { x:0, y:28, 'text-anchor':'middle', class:'val' }, `${c.props.voltage} V`));
+      g.appendChild(svgEl('text', { x:0, y:28, 'text-anchor':'middle', class:'val v' }, `${c.props.voltage} V`));
       g.appendChild(svgEl('text', { x:0, y:-24, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'switch') {
@@ -252,7 +369,7 @@ export function renderComponent(c) {
     g.appendChild(svgEl('rect', { class:'fill', x:-20, y:-10, width:40, height:20, rx:2 }));
     g.appendChild(svgEl('line', { class:'body', x1:20, y1:0, x2:40, y2:0 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y:26, 'text-anchor':'middle', class:'val' }, `${c.props.resistance} Ω`));
+      g.appendChild(svgEl('text', { x:0, y:26, 'text-anchor':'middle', class:'val r' }, `${c.props.resistance} Ω`));
       g.appendChild(svgEl('text', { x:0, y:-14, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'bulb') {
@@ -267,7 +384,7 @@ export function renderComponent(c) {
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:-9, x2:9, y2:9 }));
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:9, x2:9, y2:-9 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y:30, 'text-anchor':'middle', class:'val' }, `${c.props.resistance} Ω`));
+      g.appendChild(svgEl('text', { x:0, y:30, 'text-anchor':'middle', class:'val r' }, `${c.props.resistance} Ω`));
       g.appendChild(svgEl('text', { x:0, y:-22, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'ammeter' || c.type === 'voltmeter') {
@@ -301,7 +418,8 @@ export function renderComponent(c) {
     }, unit));
 
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y:-22, 'text-anchor':'middle', class:'label' }, c.id));
+      // Id label sits below the circle; the digital reading owns the space above.
+      g.appendChild(svgEl('text', { x:0, y:30, 'text-anchor':'middle', class:'label' }, c.id));
     }
     if (checkMeterPlacement(c) === 'warn') {
       g.classList.add('error');

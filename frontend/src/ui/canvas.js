@@ -32,26 +32,51 @@ export function updateHUD() {
 
 export function updateReadout() {
   const s = state.sim;
-  document.getElementById('ro-vs').textContent = s && s.supplyV ? s.supplyV.toFixed(1) + ' V' : '—';
-  document.getElementById('ro-it').textContent = s && typeof s.totalI === 'number' ? s.totalI.toFixed(3) + ' A' : '—';
   let status = 'idle';
   if (!s || s.empty) status = 'empty';
   else if (!s.ok) status = 'error';
   else if (s.noSource) status = 'no supply';
+  else if (s.isShort) status = 'short';
   else if (s.isOpen) status = 'open';
   else status = 'live';
   document.getElementById('ro-status').textContent = status;
 
-  let selText = '—';
-  if (state.selectedId && !state.selectedId.startsWith('wire:')) {
-    const c = state.components.find(x => x.id === state.selectedId);
-    if (c) {
-      const el = s && s.ok ? s.elements.find(e => e.comp && e.comp.id === c.id) : null;
-      if (el) selText = `${c.id} · ${Math.abs(el.current).toFixed(2)} A, ${Math.abs(el.drop).toFixed(2)} V`;
-      else selText = c.id;
-    }
-  } else if (state.selectedId && state.selectedId.startsWith('wire:')) selText = state.selectedId;
-  document.getElementById('ro-sel').textContent = selText;
+  const hd = document.getElementById('ro-sel-hd');
+  const vEl = document.getElementById('ro-sel-v');
+  const iEl = document.getElementById('ro-sel-i');
+  const rEl = document.getElementById('ro-sel-r');
+  vEl.textContent = iEl.textContent = rEl.textContent = '—';
+
+  const sel = state.selectedId;
+  if (!sel) { hd.textContent = 'Select a component'; return; }
+  if (sel.startsWith('wire:')) { hd.textContent = sel + ' — wire segment'; return; }
+
+  const c = state.components.find(x => x.id === sel);
+  if (!c) { hd.textContent = 'Select a component'; return; }
+  hd.textContent = `${c.id} · ${c.type}`;
+
+  const el = s && s.ok ? s.elements.find(e => e.comp && e.comp.id === c.id) : null;
+  const live = s && s.ok && !s.empty && !s.isShort;
+  if (el && live) {
+    vEl.textContent = Math.abs(el.drop).toFixed(2) + ' V';
+    iEl.textContent = Math.abs(el.current).toFixed(3) + ' A';
+  }
+  if (c.type === 'cell' || c.type === 'battery') {
+    vEl.textContent = Number(c.props.voltage).toFixed(2) + ' V';
+  }
+  if (c.type === 'resistor' || c.type === 'bulb') {
+    rEl.textContent = Number(c.props.resistance).toFixed(2) + ' Ω';
+  } else if (c.type === 'ammeter' || c.type === 'voltmeter') {
+    const ideal = c.type === 'ammeter' ? window.Physics.settings.ammeterR : window.Physics.settings.voltmeterR;
+    rEl.textContent = formatResistance(ideal);
+  }
+}
+
+function formatResistance(r) {
+  if (!isFinite(r) || r >= 1e7) return '∞ Ω';
+  if (r <= 1e-3) return '≈0 Ω';
+  if (r >= 1000) return (r / 1000).toFixed(2) + ' kΩ';
+  return r.toFixed(2) + ' Ω';
 }
 
 export function initTools() {
