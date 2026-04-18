@@ -6,8 +6,11 @@
 // AI's grounding context can't be spoofed by a tampered client.
 
 (function () {
-  const AMMETER_R = 0.001;
-  const VOLTMETER_R = 1e9;
+  const AMMETER_R = 0.01;       // ideal ammeter ≈ 0 Ω; small nonzero for solver stability
+  const VOLTMETER_R = 1e9;      // ideal voltmeter ≈ ∞ Ω
+  const MIN_LOAD_R = 0.5;        // minimum allowed bulb/resistor R (prevents runaway currents)
+  const CELL_INTERNAL_R = 0.1;  // small internal resistance so a cell never delivers infinite current
+  const SHORT_CIRCUIT_I = 50;   // A — above this we flag a short and clamp display
 
   // ---- MNA solver ------------------------------------------------------
   function gaussSolve(A, b) {
@@ -65,7 +68,7 @@
       if (c.type === 'cell' || c.type === 'battery') {
         elems.push({ kind: 'V', comp: c, na: getNode(c.id, '+'), nb: getNode(c.id, '-'), value: c.props.voltage });
       } else if (c.type === 'bulb' || c.type === 'resistor') {
-        elems.push({ kind: 'R', comp: c, na: getNode(c.id, 'a'), nb: getNode(c.id, 'b'), value: Math.max(0.01, c.props.resistance) });
+        elems.push({ kind: 'R', comp: c, na: getNode(c.id, 'a'), nb: getNode(c.id, 'b'), value: Math.max(MIN_LOAD_R, c.props.resistance) });
       } else if (c.type === 'ammeter') {
         elems.push({ kind: 'R', comp: c, na: getNode(c.id, 'a'), nb: getNode(c.id, 'b'), value: AMMETER_R });
       } else if (c.type === 'voltmeter') {
@@ -102,6 +105,8 @@
       const a = e.na, b = e.nb;
       if (a !== gnd) { A[a][idx] += 1; A[idx][a] += 1; }
       if (b !== gnd) { A[b][idx] -= 1; A[idx][b] -= 1; }
+      // V_a - V_b - R_int * I_source = V_value (small internal resistance)
+      A[idx][idx] -= CELL_INTERNAL_R;
       z[idx] = e.value;
     });
     for (let j = 0; j < M; j++) { A[gnd][j] = 0; A[j][gnd] = 0; }
@@ -131,6 +136,20 @@
     const mainI = mainV ? Math.abs(mainV.current) : 0;
     const isOpen = mainI < 1e-6;
 
+    const hasLoad = elems.some(e => e.kind === 'R'
+      && (e.comp.type === 'bulb' || e.comp.type === 'resistor'));
+    const isShort = !isOpen && (!hasLoad || mainI > SHORT_CIRCUIT_I);
+
+    if (isShort) {
+      // Clamp all readings — a real cell would see its fuse blow / terminal voltage collapse.
+      const clamped = results.map(e => ({ ...e, current: 0, drop: 0 }));
+      return {
+        ok: true, empty: false, isShort: true, isOpen: false,
+        nodes: V, elements: clamped, getNode,
+        supplyV: Vsrcs[0].value, totalI: 0,
+      };
+    }
+
     return {
       ok: true, empty: false,
       nodes: V, elements: results, getNode,
@@ -143,6 +162,7 @@
     if (!sim || !sim.ok) return '';
     if (sim.empty) return '';
     if (sim.noSource) return 'no supply';
+    if (sim.isShort) return 'short circuit';
     if (sim.isOpen) return 'open circuit';
     const resEls = sim.elements.filter(e => e.kind === 'R' && (e.comp.type === 'bulb' || e.comp.type === 'resistor'));
     if (resEls.length === 0) return 'short circuit';

@@ -42,6 +42,10 @@ export function redo() {
 export function simulate() { state.sim = window.Physics.simulate(state, COMP); }
 
 export function deleteComponent(cid) {
+  if (state.lockedIds && state.lockedIds.has(cid)) {
+    // Locked by the current task — refuse delete silently.
+    return;
+  }
   pushHistory();
   state.components = state.components.filter(c => c.id !== cid);
   state.wires = state.wires.filter(w => w.a.compId !== cid && w.b.compId !== cid);
@@ -49,10 +53,49 @@ export function deleteComponent(cid) {
   simulate(); render();
 }
 
+export function loadInitialCircuit(initial, taskId) {
+  pushHistory();
+  state.components = (initial.components || []).map(c => ({
+    id: c.id, type: c.type,
+    x: snap(c.x), y: snap(c.y),
+    rot: c.rot || 0,
+    props: { ...(COMP[c.type].defaultProps || {}), ...(c.props || {}) },
+  }));
+  state.wires = (initial.wires || []).map(w => ({ ...w, via: w.via || [] }));
+  state.selectedId = null;
+  state.lockedIds = new Set(initial.locked || []);
+  state.loadedTaskId = taskId;
+  // Make sure id allocator keeps generating unique ids beyond the pinned set.
+  state.nextId = Math.max(
+    state.nextId,
+    ...state.components.map(c => parseInt(c.id.replace(/\D+/g, ''), 10) || 0),
+    ...state.wires.map(w => parseInt(String(w.id).replace(/\D+/g, ''), 10) || 0),
+  ) + 1;
+  simulate(); render();
+}
+
 export function deleteWire(wid) {
   pushHistory();
   state.wires = state.wires.filter(w => w.id !== wid);
   simulate(); render();
+}
+
+export function removeWireWaypoint(wid, idx) {
+  const w = state.wires.find(ww => ww.id === wid);
+  if (!w || !w.via) return;
+  pushHistory();
+  w.via.splice(idx, 1);
+  render();
+}
+
+export function addWireWaypoint(wid, x, y) {
+  const w = state.wires.find(ww => ww.id === wid);
+  if (!w) return;
+  pushHistory();
+  if (!w.via) w.via = [];
+  // Insert at the nearest segment so waypoints remain in route order.
+  w.via.push({ x: snap(x), y: snap(y) });
+  render();
 }
 
 export function addComponent(type, x, y) {

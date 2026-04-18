@@ -5,11 +5,21 @@
 import { state, SVG_W, SVG_H, EPS } from '../state/store.js';
 import { COMP } from './schema.js';
 import { editor, onCompMouseDown, onTerminalPointerDown } from './editor.js';
-import { deleteWire, deleteComponent } from '../state/actions.js';
+import { deleteWire, deleteComponent, addWireWaypoint, removeWireWaypoint } from '../state/actions.js';
 import { updateHUD, updateReadout } from '../ui/canvas.js';
 
 export const svg = document.getElementById('canvas');
 const SVGNS = 'http://www.w3.org/2000/svg';
+
+export function svgPointFromEvent(ev) {
+  if (!svg.createSVGPoint) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = ev.clientX; pt.y = ev.clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  const p = pt.matrixTransform(ctm.inverse());
+  return { x: p.x, y: p.y };
+}
 
 export function svgEl(tag, attrs, ...children) {
   const e = document.createElementNS(SVGNS, tag);
@@ -30,13 +40,41 @@ export function termPos(comp, termName) {
 
 export function keyOfTerm(cid, tn) { return cid + '.' + tn; }
 
-export function manhattanPath(a, b) {
-  // Routing: horizontal then vertical (or vice versa) with rounded corner
-  const dx = b.x - a.x, dy = b.y - a.y;
-  if (Math.abs(dx) < 1 || Math.abs(dy) < 1) return `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
-  const mx = a.x + dx;
-  return `M ${a.x} ${a.y} L ${mx} ${a.y} L ${mx} ${b.y} L ${b.x} ${b.y}`;
+// Route a single orthogonal segment p → q. Picks whether to go horizontal-
+// first or vertical-first so the elbow sits in the middle rather than always
+// at the top-right corner of the bounding box.
+function segmentPath(p, q, horizontalFirst) {
+  const dx = q.x - p.x, dy = q.y - p.y;
+  if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return `L ${q.x} ${q.y}`;
+  if (Math.abs(dx) < 1 || Math.abs(dy) < 1) return `L ${q.x} ${q.y}`;
+  if (horizontalFirst) {
+    const mx = p.x + dx / 2;
+    return `L ${mx} ${p.y} L ${mx} ${q.y} L ${q.x} ${q.y}`;
+  } else {
+    const my = p.y + dy / 2;
+    return `L ${p.x} ${my} L ${q.x} ${my} L ${q.x} ${q.y}`;
+  }
 }
+
+// Full wire path through optional waypoints. Each segment's orientation is
+// picked independently so the wire takes a natural looping route instead of
+// always snapping to one corner of the bounding box.
+export function wirePath(a, b, via = []) {
+  const pts = [a, ...(via || []), b];
+  let d = `M ${a.x} ${a.y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i - 1], q = pts[i];
+    const dx = q.x - p.x, dy = q.y - p.y;
+    // Prefer to emerge along the axis of the larger delta first — keeps the
+    // long run away from the terminals they emerge from.
+    const horizontalFirst = Math.abs(dx) >= Math.abs(dy);
+    d += ' ' + segmentPath(p, q, horizontalFirst);
+  }
+  return d;
+}
+
+// Backwards-compat alias still used by the preview wire.
+export function manhattanPath(a, b) { return wirePath(a, b, []); }
 
 export function checkMeterPlacement(meter) {
   // Warn if ammeter has voltmeter placement (no current through it means maybe in parallel as bypass) —
@@ -70,7 +108,7 @@ export function render() {
     if (!ca || !cb) continue;
     const p1 = termPos(ca, w.a.term);
     const p2 = termPos(cb, w.b.term);
-    const d = manhattanPath(p1, p2);
+    const d = wirePath(p1, p2, w.via || []);
     let cls = 'wire';
     if (state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen && state.toggles.current) {
       const nodeA = state.sim.getNode(w.a.compId, w.a.term);
@@ -81,9 +119,39 @@ export function render() {
     const path = svgEl('path', {
       class: cls, d,
       'data-wid': w.id,
-      onclick: (ev) => { ev.stopPropagation(); if (state.tool === 'delete') deleteWire(w.id); else { state.selectedId = 'wire:'+w.id; render(); updateReadout(); } },
+      onclick: (ev) => {
+        ev.stopPropagation();
+        if (state.tool === 'delete') { deleteWire(w.id); return; }
+        // Click anywhere on the wire (not on a terminal) adds a detour waypoint
+        // so the user can force the wire to loop around other components.
+        const pt = svgPointFromEvent(ev);
+        if (pt) addWireWaypoint(w.id, pt.x, pt.y);
+        state.selectedId = 'wire:' + w.id;
+        render();
+        updateReadout();
+      },
     });
     wiresG.appendChild(path);
+    // Draggable handles for existing waypoints
+    if (w.via && w.via.length) {
+      for (let wi = 0; wi < w.via.length; wi++) {
+        const wp = w.via[wi];
+        const widx = wi, wid = w.id;
+        wiresG.appendChild(svgEl('circle', {
+          class: 'wire-waypoint', cx: wp.x, cy: wp.y, r: 5,
+          'data-wid': wid, 'data-widx': widx,
+          onpointerdown: (ev) => {
+            ev.stopPropagation();
+            if (state.tool === 'delete') {
+              removeWireWaypoint(wid, widx);
+              return;
+            }
+            editor.draggingWaypoint = { wid, widx };
+            try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
+          },
+        }));
+      }
+    }
   }
   svg.appendChild(wiresG);
 
@@ -132,8 +200,9 @@ export function render() {
 }
 
 export function renderComponent(c) {
+  const isLocked = state.lockedIds && state.lockedIds.has(c.id);
   const g = svgEl('g', {
-    class: 'comp' + (state.selectedId === c.id ? ' selected' : ''),
+    class: 'comp' + (state.selectedId === c.id ? ' selected' : '') + (isLocked ? ' locked' : ''),
     transform: `translate(${c.x}, ${c.y})`,
     'data-cid': c.id,
     onpointerdown: (ev) => onCompMouseDown(ev, c),
@@ -207,13 +276,31 @@ export function renderComponent(c) {
     g.appendChild(svgEl('line', { class:'body', x1:14, y1:0, x2:30, y2:0 }));
     g.appendChild(svgEl('circle', { class:'fill', cx:0, cy:0, r:14 }));
     g.appendChild(svgEl('text', { x:0, y:4, 'text-anchor':'middle', class:'label', 'font-size': 13 }, isA ? 'A' : 'V'));
-    let reading = '—';
-    if (simEl && state.sim && state.sim.ok && !state.sim.empty) {
-      if (isA) reading = Math.abs(simEl.current).toFixed(2) + ' A';
-      else reading = Math.abs(simEl.drop).toFixed(2) + ' V';
+
+    // Digital LCD-style readout sitting just above the meter
+    let digits = '- - . - -';
+    let unit = isA ? 'A' : 'V';
+    if (simEl && state.sim && state.sim.ok && !state.sim.empty && !state.sim.isShort) {
+      const raw = isA ? Math.abs(simEl.current) : Math.abs(simEl.drop);
+      digits = raw < 10 ? raw.toFixed(2) : raw.toFixed(1);
     }
+    const lcdW = 54, lcdH = 18, lcdY = -38;
+    g.appendChild(svgEl('rect', {
+      class: 'meter-lcd-bg' + (isA ? '' : ' v'),
+      x: -lcdW/2, y: lcdY, width: lcdW, height: lcdH, rx: 3,
+    }));
+    g.appendChild(svgEl('text', {
+      x: lcdW/2 - 4, y: lcdY + lcdH - 5,
+      'text-anchor': 'end',
+      class: 'meter-lcd-text' + (isA ? '' : ' v'),
+    }, digits));
+    g.appendChild(svgEl('text', {
+      x: -lcdW/2 + 4, y: lcdY + lcdH - 5,
+      class: 'meter-lcd-text' + (isA ? '' : ' v'),
+      'font-size': 10,
+    }, unit));
+
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y:30, 'text-anchor':'middle', class:'val' }, reading));
       g.appendChild(svgEl('text', { x:0, y:-22, 'text-anchor':'middle', class:'label' }, c.id));
     }
     if (checkMeterPlacement(c) === 'warn') {
@@ -221,18 +308,36 @@ export function renderComponent(c) {
     }
   }
 
-  // Voltage drop bar for resistors/bulbs
-  if (state.toggles.voltage && simEl && (c.type === 'bulb' || c.type === 'resistor') && state.sim && state.sim.ok && state.sim.supplyV > 0) {
-    const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
-    const bw = 40;
-    g.appendChild(svgEl('rect', { class:'vbar-bg', x:-bw/2, y: COMP[c.type].h/2 + 12, width: bw, height: 3, rx:1.5 }));
-    g.appendChild(svgEl('rect', { class:'vbar-fg', x:-bw/2, y: COMP[c.type].h/2 + 12, width: bw*vfrac, height: 3, rx:1.5 }));
-  }
-  if (state.toggles.current && simEl && state.sim && state.sim.ok && state.sim.totalI > 0) {
-    const ifrac = Math.min(1, Math.abs(simEl.current) / Math.max(state.sim.totalI, EPS));
-    const bw = 40;
-    g.appendChild(svgEl('rect', { class:'vbar-bg', x:-bw/2, y: COMP[c.type].h/2 + 18, width: bw, height: 3, rx:1.5 }));
-    g.appendChild(svgEl('rect', { class:'ibar-fg', x:-bw/2, y: COMP[c.type].h/2 + 18, width: bw*ifrac, height: 3, rx:1.5 }));
+  // Voltage drop + current bars for resistors/bulbs — now larger with numeric
+  // labels so students can read them without hovering.
+  const showBars = simEl && (c.type === 'bulb' || c.type === 'resistor')
+    && state.sim && state.sim.ok && !state.sim.isShort;
+  if (showBars) {
+    const bw = 60, bh = 7;
+    const yBase = COMP[c.type].h / 2 + 16;
+    if (state.toggles.voltage && state.sim.supplyV > 0) {
+      const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
+      g.appendChild(svgEl('rect', { class:'vbar-bg', x:-bw/2, y: yBase, width: bw, height: bh, rx:2 }));
+      g.appendChild(svgEl('rect', { class:'vbar-fg', x:-bw/2, y: yBase, width: bw*vfrac, height: bh, rx:2 }));
+      g.appendChild(svgEl('text', {
+        x: -bw/2 - 4, y: yBase + bh - 1, 'text-anchor':'end', class:'bar-label v',
+      }, 'V'));
+      g.appendChild(svgEl('text', {
+        x: bw/2 + 4, y: yBase + bh - 1, class:'bar-label v',
+      }, `${Math.abs(simEl.drop).toFixed(2)}V`));
+    }
+    if (state.toggles.current && state.sim.totalI > 0) {
+      const ifrac = Math.min(1, Math.abs(simEl.current) / Math.max(state.sim.totalI, EPS));
+      const y2 = yBase + bh + 4;
+      g.appendChild(svgEl('rect', { class:'vbar-bg', x:-bw/2, y: y2, width: bw, height: bh, rx:2 }));
+      g.appendChild(svgEl('rect', { class:'ibar-fg', x:-bw/2, y: y2, width: bw*ifrac, height: bh, rx:2 }));
+      g.appendChild(svgEl('text', {
+        x: -bw/2 - 4, y: y2 + bh - 1, 'text-anchor':'end', class:'bar-label i',
+      }, 'I'));
+      g.appendChild(svgEl('text', {
+        x: bw/2 + 4, y: y2 + bh - 1, class:'bar-label i',
+      }, `${Math.abs(simEl.current).toFixed(2)}A`));
+    }
   }
 
   return g;

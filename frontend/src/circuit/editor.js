@@ -9,6 +9,7 @@ import { updateReadout } from '../ui/canvas.js';
 export const editor = {
   hoveredTerm: null,
   dragging: null,  // {compId, offsetX, offsetY, moved, started}
+  draggingWaypoint: null, // {wid, widx}
   previewEl: null, // set by renderer.render() when a pending wire exists
 };
 
@@ -83,6 +84,16 @@ export function updateWireHoverTarget(clientX, clientY) {
 export function initCanvasInteractions() {
   svg.addEventListener('pointermove', (ev) => {
     const p = svgPoint(ev);
+    if (editor.draggingWaypoint) {
+      const { wid, widx } = editor.draggingWaypoint;
+      const w = state.wires.find(ww => ww.id === wid);
+      if (w && w.via && w.via[widx]) {
+        w.via[widx].x = snap(p.x);
+        w.via[widx].y = snap(p.y);
+        render();
+      }
+      return;
+    }
     if (editor.dragging) {
       const c = state.components.find(x => x.id === editor.dragging.compId);
       if (c) {
@@ -108,6 +119,11 @@ export function initCanvasInteractions() {
   });
 
   svg.addEventListener('pointerup', (ev) => {
+    if (editor.draggingWaypoint) {
+      editor.draggingWaypoint = null;
+      try { svg.releasePointerCapture(ev.pointerId); } catch (_) {}
+      return;
+    }
     if (editor.dragging) {
       if (editor.dragging.moved) { pushHistory(); simulate(); render(); }
       editor.dragging = null;

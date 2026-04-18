@@ -11,11 +11,23 @@ Env vars:
 """
 import json
 import os
+import sys
+import traceback
 from http.server import BaseHTTPRequestHandler
 
-from openai import OpenAI
+try:
+    from openai import OpenAI
+    _OPENAI_IMPORT_ERROR = None
+except Exception as _exc:  # noqa: BLE001 — surface import issues as a JSON error
+    OpenAI = None
+    _OPENAI_IMPORT_ERROR = f"{type(_exc).__name__}: {_exc}"
 
-from circuit_validator import analyse
+try:
+    from circuit_validator import analyse
+    _VALIDATOR_IMPORT_ERROR = None
+except Exception as _exc:  # noqa: BLE001
+    analyse = None
+    _VALIDATOR_IMPORT_ERROR = f"{type(_exc).__name__}: {_exc}"
 
 
 # Mirrors the non-negotiable parts of backend/generate.py SYSTEM_PROMPT.
@@ -83,6 +95,8 @@ def _build_user_payload(req, analysis):
 
 
 def _call_openai(user_payload):
+    if OpenAI is None:
+        return _safe_fallback(f"OpenAI SDK not importable: {_OPENAI_IMPORT_ERROR}")
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return _safe_fallback("OPENAI_API_KEY not configured on the server.")
@@ -90,16 +104,45 @@ def _call_openai(user_payload):
     client = OpenAI(api_key=api_key)
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
+    common = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_payload},
         ],
-        response_format={"type": "json_object"},
-        temperature=0.3,
-        max_tokens=600,
-    )
+        "response_format": {"type": "json_object"},
+    }
+
+    # Newer OpenAI models (gpt-4.1+, o-series) reject `max_tokens` and require
+    # `max_completion_tokens`; older ones (gpt-4o-mini, gpt-3.5-*) reject the
+    # new param. Some reasoning models also reject custom `temperature`. Be
+    # tolerant of both regimes by retrying on TypeError / BadRequestError.
+    def _create(**extra):
+        return client.chat.completions.create(**common, **extra)
+
+    last_exc = None
+    for kwargs in (
+        {"temperature": 0.3, "max_completion_tokens": 600},
+        {"temperature": 0.3, "max_tokens": 600},
+        {"max_completion_tokens": 600},
+        {"max_tokens": 600},
+    ):
+        try:
+            resp = _create(**kwargs)
+            break
+        except TypeError as exc:
+            last_exc = exc
+            continue
+        except Exception as exc:  # noqa: BLE001 — retry on param-rejection 400s
+            msg = str(exc).lower()
+            if ("max_tokens" in msg or "max_completion_tokens" in msg
+                    or "temperature" in msg or "unsupported" in msg):
+                last_exc = exc
+                continue
+            raise
+    else:
+        return _safe_fallback(f"OpenAI param-mismatch: {last_exc}")
+
     raw = resp.choices[0].message.content or "{}"
     try:
         parsed = json.loads(raw)
@@ -160,16 +203,28 @@ class handler(BaseHTTPRequestHandler):
 
         circuit_state = req.get("circuit_state") or {}
         try:
-            analysis = analyse(_extract_state_for_analysis(circuit_state))
+            if analyse is None:
+                analysis = {"error": f"validator not importable: {_VALIDATOR_IMPORT_ERROR}"}
+            else:
+                analysis = analyse(_extract_state_for_analysis(circuit_state))
         except Exception as exc:  # noqa: BLE001 - defensive; don't 500 the student
             analysis = {"error": f"analysis failed: {exc}"}
 
         try:
             parsed = _call_openai(_build_user_payload(req, analysis))
         except Exception as exc:  # noqa: BLE001
-            parsed = _safe_fallback(f"upstream model error: {exc}")
+            traceback.print_exc(file=sys.stderr)
+            parsed = _safe_fallback(f"upstream model error: {type(exc).__name__}: {exc}")
 
         self._respond(200, {"reply": parsed, "analysis": analysis})
 
     def do_GET(self):
-        self._respond(200, {"ok": True, "service": "tutor"})
+        self._respond(200, {
+            "ok": True,
+            "service": "tutor",
+            "openai_key_set": bool(os.environ.get("OPENAI_API_KEY")),
+            "model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+            "openai_import_error": _OPENAI_IMPORT_ERROR,
+            "validator_import_error": _VALIDATOR_IMPORT_ERROR,
+            "python": sys.version,
+        })

@@ -18,6 +18,9 @@ export function updateHUD() {
   } else if (s.noSource) {
     stateChip.innerHTML = 'Circuit: <b>no supply</b>';
     stateChip.className = 'chip warn';
+  } else if (s.isShort) {
+    stateChip.innerHTML = 'Circuit: <b>short circuit — add a bulb or resistor</b>';
+    stateChip.className = 'chip bad';
   } else if (s.isOpen) {
     stateChip.innerHTML = 'Circuit: <b>open loop — no current flows</b>';
     stateChip.className = 'chip warn';

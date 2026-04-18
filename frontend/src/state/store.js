@@ -21,4 +21,6 @@ export const state = {
   currentTaskIndex: 0,
   tasksCompleted: new Set(),
   messages: [],
+  lockedIds: new Set(),     // component ids that the current task has pinned
+  loadedTaskId: null,       // last task whose initial circuit was loaded
 };
