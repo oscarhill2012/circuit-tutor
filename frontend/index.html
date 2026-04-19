@@ -26,6 +26,7 @@
     </div>
     <div class="right">
       <span class="badge ai" title="AI transparency">● AI Tutor On</span>
+      <button class="iconbtn" id="btn-open-tasks">Tasks</button>
       <button class="iconbtn" id="btn-help">Help</button>
     </div>
   </div>
@@ -57,6 +58,15 @@
       <div class="toggle on" data-toggle="voltage">Show voltage</div>
       <div class="toggle on" data-toggle="labels">Show labels</div>
     </div>
+    <!-- Floating active-task widget. Populated by tasks/engine.js when a
+         task is picked from the task-loader modal. Hidden in sandbox mode. -->
+    <div class="task-widget hidden" id="task-widget">
+      <div class="task-widget-hd">
+        <span id="task-widget-title">Task</span>
+        <button class="iconbtn" id="btn-open-tasks-2" title="Change task">Change</button>
+      </div>
+      <div class="task-card" id="task-card"></div>
+    </div>
     <div class="readout" id="readout">
       <h4>Live readings</h4>
       <div class="row"><span>Status</span><b id="ro-status">—</b></div>
@@ -67,40 +77,39 @@
     </div>
   </div>
 
-  <!-- Right column: tasks + tutor -->
+  <!-- Right column: tutor only. Task selection lives in the central modal. -->
   <div class="rightcol">
-    <div class="tasks">
-      <div class="hd">
-        <h3>Task</h3>
-        <div style="display:flex; gap:6px;">
-          <button class="iconbtn" id="btn-prev-task">‹</button>
-          <button class="iconbtn" id="btn-next-task">›</button>
-        </div>
-      </div>
-      <div class="progress"><div id="prog-bar"></div></div>
-      <div class="task-card" id="task-card"></div>
-    </div>
     <div class="tutor">
       <div class="hd">
         <div class="persona">
           <div class="persona-avatar">V</div>
           <div>
             <div class="persona-name">Professor Volt</div>
-            <div class="persona-role">Socratic GCSE circuits tutor</div>
           </div>
         </div>
         <button class="iconbtn" id="btn-clear-chat">Clear</button>
       </div>
       <div class="messages" id="messages"></div>
       <div class="tutor-quick">
-        <button data-quick="hint">Give me a hint</button>
-        <button data-quick="check">Check my circuit</button>
-        <button data-quick="explain">Explain this topic</button>
+        <button data-quick="hint">Ask for a hint</button>
       </div>
       <div class="tutor-input">
         <input id="chat-input" placeholder="Ask Professor Volt…" />
         <button id="chat-send">Send</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Central task-loader modal. Shown on first load and whenever a task
+     completes. Lists all tasks + a sandbox option. -->
+<div class="modal hidden" id="task-modal">
+  <div class="modal-card modal-card-wide">
+    <h2>Choose a task</h2>
+    <p>Pick something to work on, or explore freely in sandbox mode. Professor Volt will introduce each task when you start.</p>
+    <div class="task-list" id="task-list"></div>
+    <div class="actions">
+      <button class="ghost" id="btn-sandbox">Sandbox mode</button>
     </div>
   </div>
 </div>

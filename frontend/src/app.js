@@ -8,8 +8,8 @@ import { render } from './circuit/renderer.js';
 import { initCanvasInteractions } from './circuit/editor.js';
 import { initPalette } from './ui/palette.js';
 import { initTools, initKeyboard, updateReadout } from './ui/canvas.js';
-import { renderTask, initTaskControls, loadTasks } from './tasks/engine.js';
-import { initTutorPanel, greet } from './ui/tutorPanel.js';
+import { initTaskControls, loadTasks, openTaskModal } from './tasks/engine.js';
+import { initTutorPanel } from './ui/tutorPanel.js';
 
 export { state };
 
@@ -40,8 +40,9 @@ export async function boot() {
   state.future = [];
   simulate();
   render();
-  renderTask();
   updateReadout();
 
-  greet();
+  // Open the task loader on first boot. The student picks a task or
+  // enters sandbox mode; Professor Volt introduces whichever they chose.
+  openTaskModal();
 }

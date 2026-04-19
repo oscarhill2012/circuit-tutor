@@ -4,7 +4,7 @@
 
 import { state } from '../state/store.js';
 import { applyVisualInstructions } from '../circuit/renderer.js';
-import { TASKS } from '../tasks/engine.js';
+import { getActiveTask } from '../tasks/engine.js';
 import { pushUserMsg, appendThinking, removeThinking, appendTutorMsg } from '../ui/tutorPanel.js';
 import { PINNED, retrieve } from '../data/knowledgeBase.js';
 
@@ -65,7 +65,7 @@ function truncateHistory(messages) {
 }
 
 function buildUserPayload(studentMessage) {
-  const t = TASKS[state.currentTaskIndex];
+  const t = getActiveTask();
   const recent = truncateHistory(state.messages);
 
   // Pinned safeguarding + foundational rules are ALWAYS sent on every turn.

@@ -1,13 +1,27 @@
 // Task engine: loads the ordered task list from frontend/src/data/tasks.json
-// at boot, then renders the current task card into the right-hand panel.
-// Supported task types: measure (build-and-read a meter), problem (multiple
-// choice), scenario (check circuit against criteria), exploration (free).
+// at boot. Task selection now happens in a central modal (openTaskModal).
+// When a task is picked, the floating #task-widget is populated with the
+// card UI, the initial circuit is loaded (for measure tasks), and
+// Professor Volt is asked to outline the aim of the task. On completion
+// the modal re-opens so the student can choose what to do next.
+//
+// Supported task types: measure, problem, scenario, exploration.
+// The scenario checker supports three modes, selected by successCriteria:
+//   - ammeter_mode/voltmeter_mode: meter-placement check
+//   - fault: break_in_loop detection
+//   - verify_ohms_law: full build-and-verify — requires a named ammeter and
+//     voltmeter correctly placed on a target component, with current,
+//     voltage and inferred R = V/I all matching expected values within tol.
 
 import { state } from '../state/store.js';
 import { askTutorAbout } from '../tutor/api.js';
 import { loadInitialCircuit } from '../state/actions.js';
+import { appendTutorMsg } from '../ui/tutorPanel.js';
 
 export const TASKS = [];
+
+// null = sandbox mode (no active task)
+let activeTaskId = null;
 
 export async function loadTasks() {
   const res = await fetch('./src/data/tasks.json', { cache: 'no-cache' });
@@ -33,22 +47,103 @@ function shuffleSeed(arr, seed) {
   return a;
 }
 
-function updateProgressBar() {
-  const el = document.getElementById('prog-bar');
-  if (el && TASKS.length) el.style.width = (state.tasksCompleted.size / TASKS.length * 100) + '%';
+function setActiveTask(taskId) {
+  activeTaskId = taskId;
+  if (taskId) {
+    const idx = TASKS.findIndex(t => t.id === taskId);
+    if (idx >= 0) state.currentTaskIndex = idx;
+  }
+}
+
+export function openTaskModal() {
+  const modal = document.getElementById('task-modal');
+  const list = document.getElementById('task-list');
+  list.innerHTML = '';
+  TASKS.forEach((t) => {
+    const done = state.tasksCompleted.has(t.id);
+    const item = document.createElement('button');
+    item.className = 'task-list-item' + (done ? ' done' : '');
+    const title =
+      t.data.brief ||
+      t.data.question ||
+      t.data.challenge ||
+      t.data.concept ||
+      t.id;
+    item.innerHTML = `
+      <span class="tl-topic">${escapeHtml(t.topicName || t.topicId)}</span>
+      <span class="tl-title">${escapeHtml(title.length > 120 ? title.slice(0, 117) + '…' : title)}</span>
+      <span class="tl-meta">${escapeHtml(t.type)} · ${escapeHtml(t.difficulty)}${done ? ' · ✓ done' : ''}</span>
+    `;
+    item.onclick = () => startTask(t.id);
+    list.appendChild(item);
+  });
+  modal.classList.remove('hidden');
+}
+
+export function closeTaskModal() {
+  document.getElementById('task-modal').classList.add('hidden');
+}
+
+function hideTaskWidget() {
+  document.getElementById('task-widget').classList.add('hidden');
+}
+function showTaskWidget(titleText) {
+  document.getElementById('task-widget').classList.remove('hidden');
+  document.getElementById('task-widget-title').textContent = titleText;
+}
+
+export function enterSandbox() {
+  setActiveTask(null);
+  hideTaskWidget();
+  closeTaskModal();
+  appendTutorMsg({
+    reply_type: 'direct_explanation',
+    assistant_text: "You're in sandbox mode — build whatever you like. Feel free to ask any questions if you find anything interesting or confusing you'd like to discuss.",
+  });
+}
+
+export function startTask(taskId) {
+  const t = TASKS.find(x => x.id === taskId);
+  if (!t) return;
+  setActiveTask(taskId);
+  closeTaskModal();
+  // Both measure and scenario tasks may pre-load an initial circuit (pinned
+  // components) so the learner just has to wire them up correctly.
+  if ((t.type === 'measure' || t.type === 'scenario')
+      && t.data.initial
+      && state.loadedTaskId !== t.id) {
+    loadInitialCircuit(t.data.initial, t.id);
+  }
+  showTaskWidget(`${t.topicName} · ${t.difficulty}`);
+  renderTask();
+  introduceTask(t);
+}
+
+// Seed Professor Volt with the task aim. This is NOT a Socratic question —
+// it simply states the goal so the student knows what they're working on.
+// Further replies from the tutor remain Socratic.
+function introduceTask(t) {
+  let text = '';
+  if (t.type === 'measure') {
+    text = `New task — **${t.topicName}** (${t.difficulty}).\n\nAim: ${t.data.brief}\n\nBuild the circuit, then tell me the reading or ask for a hint if you get stuck.`;
+  } else if (t.type === 'problem') {
+    text = `New task — **${t.topicName}** (${t.difficulty}).\n\nAim: work out the answer to this question — ${t.data.question}\n\nPick an option in the task panel when you're ready, or ask me for a hint.`;
+  } else if (t.type === 'scenario') {
+    text = `New task — **${t.topicName}** (${t.difficulty}).\n\nAim: ${t.data.challenge} ${t.data.narrative ? '\n\n' + t.data.narrative : ''}\n\nBuild it and hit "Check my circuit" when you think it's right.`;
+  } else if (t.type === 'exploration') {
+    const first = (t.data.guidedQuestions && t.data.guidedQuestions[0]) || '';
+    text = `New exploration — **${t.topicName}**.\n\nAim: investigate "${t.data.concept}". ${first ? 'Start with this: ' + first : ''}\n\nThere's no single right answer — tell me what you notice.`;
+  }
+  appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: text });
 }
 
 export function renderTask() {
   const card = document.getElementById('task-card');
-  const t = TASKS[state.currentTaskIndex];
-  if (!t) { card.innerHTML = '<p>No tasks.</p>'; return; }
-
-  if (t.type === 'measure' && state.loadedTaskId !== t.id) {
-    loadInitialCircuit(t.data.initial, t.id);
-  }
+  if (!activeTaskId) { card.innerHTML = ''; return; }
+  const t = TASKS.find(x => x.id === activeTaskId);
+  if (!t) { card.innerHTML = ''; return; }
 
   const done = state.tasksCompleted.has(t.id);
-  updateProgressBar();
 
   if (t.type === 'measure') {
     card.innerHTML = `
@@ -63,8 +158,6 @@ export function renderTask() {
       <div class="row">
         <button id="btn-check-measure">Check answer</button>
         <button class="ghost" id="btn-reload-task">Reset task</button>
-        <button class="ghost" id="btn-hint">Hint</button>
-        <button class="ghost" id="btn-ask-tutor">Ask Professor Volt</button>
       </div>
       <div class="feedback" id="feedback"></div>
     `;
@@ -93,10 +186,9 @@ export function renderTask() {
       const matchesExpected = Math.abs(actual - t.data.correctAnswer) < t.data.tolerance;
 
       if (matchesActual && matchesExpected) {
-        state.tasksCompleted.add(t.id);
+        completeTask(t);
         fb.className = 'feedback show good';
         fb.innerHTML = `<b>Correct!</b> ${escapeHtml(t.data.explanation)}`;
-        updateProgressBar();
       } else if (!matchesActual) {
         fb.className = 'feedback show bad';
         fb.innerHTML = `Your typed value (${userVal.toFixed(2)} ${t.data.targetUnit}) doesn\u2019t match what ${t.data.targetMeter} is showing (${actual.toFixed(2)} ${t.data.targetUnit}). Re-read the meter.`;
@@ -106,23 +198,13 @@ export function renderTask() {
       }
     };
     document.getElementById('btn-reload-task').onclick = () => loadInitialCircuit(t.data.initial, t.id);
-    document.getElementById('btn-hint').onclick = () => {
-      const fb = document.getElementById('feedback');
-      fb.className = 'feedback show';
-      fb.textContent = t.data.hint;
-    };
-    document.getElementById('btn-ask-tutor').onclick = () => askTutorAbout(`I\u2019m on this build task: ${t.data.brief}`);
   } else if (t.type === 'problem') {
     const opts = shuffleSeed([t.data.correctAnswer, ...t.data.distractors], t.id);
     card.innerHTML = `
       <div class="pill">${t.topicName} · ${t.difficulty}</div>
       <h4>${escapeHtml(t.data.question)}</h4>
       <div class="mc" id="mc-opts">
-        ${opts.map((o,i) => `<button data-val="${o}">${o} ${t.data.unit}</button>`).join('')}
-      </div>
-      <div class="row">
-        <button class="ghost" id="btn-hint">Hint</button>
-        <button class="ghost" id="btn-ask-tutor">Ask Professor Volt</button>
+        ${opts.map((o) => `<button data-val="${o}">${o} ${t.data.unit}</button>`).join('')}
       </div>
       <div class="feedback" id="feedback"></div>
     `;
@@ -134,10 +216,9 @@ export function renderTask() {
         b.classList.add(correct ? 'correct' : 'wrong');
         const fb = document.getElementById('feedback');
         if (correct) {
-          state.tasksCompleted.add(t.id);
           fb.className = 'feedback show good';
           fb.innerHTML = `<b>Correct!</b> Working:<ol>${t.data.workingSteps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol>`;
-          updateProgressBar();
+          completeTask(t);
         } else {
           fb.className = 'feedback show bad';
           fb.innerHTML = `<b>Not quite.</b> Try again, or ask Professor Volt for a hint.`;
@@ -146,17 +227,19 @@ export function renderTask() {
         }
       };
     });
-    document.getElementById('btn-hint').onclick = () => askTutorAbout(`Give me a small hint for this problem: "${t.data.question}". Don't give me the answer.`);
-    document.getElementById('btn-ask-tutor').onclick = () => askTutorAbout(`I'm working on: "${t.data.question}". Can you help me think about it?`);
   } else if (t.type === 'scenario') {
+    const pinned = t.data.initial
+      ? `<div class="criteria"><b>Pinned:</b> ${t.data.initial.components.map(c => c.id).join(', ')}</div>`
+      : '';
     card.innerHTML = `
       <div class="pill">${t.topicName} · ${t.difficulty} · scenario</div>
       <h4>${escapeHtml(t.data.challenge)}</h4>
       <p style="color: var(--muted); font-size: 13px; margin: 6px 0;">${escapeHtml(t.data.narrative)}</p>
-      <div class="criteria"><b>Given:</b> ${Object.entries(t.data.parameters).map(([k,v]) => `${k}=${v}`).join(', ')}</div>
+      <div class="criteria"><b>Given:</b> ${Object.entries(t.data.parameters || {}).map(([k,v]) => `${k}=${v}`).join(', ')}</div>
+      ${pinned}
       <div class="row">
         <button id="btn-check-scenario">Check my circuit</button>
-        <button class="ghost" id="btn-ask-tutor">Ask Professor Volt</button>
+        ${t.data.initial ? '<button class="ghost" id="btn-reload-scenario">Reset task</button>' : ''}
       </div>
       <div class="feedback" id="feedback"></div>
     `;
@@ -165,10 +248,10 @@ export function renderTask() {
       const fb = document.getElementById('feedback');
       fb.className = 'feedback show ' + (res.ok ? 'good' : 'bad');
       fb.innerHTML = res.message;
-      if (res.ok) state.tasksCompleted.add(t.id);
-      updateProgressBar();
+      if (res.ok) completeTask(t);
     };
-    document.getElementById('btn-ask-tutor').onclick = () => askTutorAbout(`I'm on this challenge: ${t.data.challenge}. ${t.data.narrative}`);
+    const rel = document.getElementById('btn-reload-scenario');
+    if (rel) rel.onclick = () => loadInitialCircuit(t.data.initial, t.id);
   } else if (t.type === 'exploration') {
     card.innerHTML = `
       <div class="pill">${t.topicName} · exploration</div>
@@ -178,20 +261,24 @@ export function renderTask() {
       </ol>
       <div class="row">
         <button id="btn-mark-done">Mark as explored</button>
-        <button class="ghost" id="btn-ask-tutor">Discuss with Professor Volt</button>
       </div>
     `;
-    document.getElementById('btn-mark-done').onclick = () => {
-      state.tasksCompleted.add(t.id);
-      updateProgressBar();
-      nextTask();
-    };
-    document.getElementById('btn-ask-tutor').onclick = () => askTutorAbout(`I'm exploring: ${t.data.concept}. ${t.data.guidedQuestions[0]}`);
+    document.getElementById('btn-mark-done').onclick = () => completeTask(t);
   }
   if (done) {
     const fb = card.querySelector('#feedback');
     if (fb) { fb.className = 'feedback show good'; fb.textContent = '✓ Already completed — feel free to move on.'; }
   }
+}
+
+function completeTask(t) {
+  state.tasksCompleted.add(t.id);
+  // Let the student read the feedback, then reopen the task picker.
+  setTimeout(() => {
+    hideTaskWidget();
+    activeTaskId = null;
+    openTaskModal();
+  }, 3000);
 }
 
 function checkScenario(t) {
@@ -213,6 +300,72 @@ function checkScenario(t) {
     if (!ammOk) return { ok:false, message:'Your ammeter isn\'t reading any current. An ammeter must be placed <b>in series</b> with the bulb.' };
     if (!voltOk) return { ok:false, message:'Your voltmeter isn\'t correctly placed. It must be connected <b>in parallel across</b> the bulb.' };
   }
+  // Ohm's-law verification scenario. Validates:
+  //   - a named ammeter is present, in series (|I| > eps), and reading the
+  //     current through the target component (|I_amm - I_target| < tol)
+  //   - a named voltmeter is present, in parallel (|I| ~ 0, |V| > eps), and
+  //     placed across the target component (|V_volt - V_target| < tol)
+  //   - the ammeter reading matches the expected current (within tol)
+  //   - the voltmeter reading matches the expected voltage (within tol)
+  //   - the inferred resistance R = V / I matches the expected value (within tol)
+  if (sc.verify_ohms_law) {
+    const ammId   = sc.ammeter;
+    const voltId  = sc.voltmeter;
+    const tgtId   = sc.target_component;
+    const expI    = sc.expected_current;
+    const expV    = sc.expected_voltage;
+    const expR    = sc.expected_resistance;
+    const tolI    = sc.current_tol ?? 0.1;
+    const tolV    = sc.voltage_tol ?? 0.2;
+    const tolR    = sc.resistance_tol ?? 0.2;
+
+    const amm  = state.components.find(c => c.id === ammId  && c.type === 'ammeter');
+    const volt = state.components.find(c => c.id === voltId && c.type === 'voltmeter');
+    const tgt  = state.components.find(c => c.id === tgtId);
+    if (!amm)  return { ok:false, message:`I can't see ammeter ${ammId} in the circuit.` };
+    if (!volt) return { ok:false, message:`I can't see voltmeter ${voltId} in the circuit.` };
+    if (!tgt)  return { ok:false, message:`I can't see component ${tgtId} in the circuit.` };
+    if (s.isOpen)  return { ok:false, message:'The circuit is open — no current is flowing. Check the wiring.' };
+    if (s.isShort) return { ok:false, message:'The circuit is shorted — add the resistor/bulb back into the loop.' };
+
+    const ammEl  = s.elements.find(e => e.comp.id === ammId);
+    const voltEl = s.elements.find(e => e.comp.id === voltId);
+    const tgtEl  = s.elements.find(e => e.comp.id === tgtId);
+    if (!ammEl || !voltEl || !tgtEl) {
+      return { ok:false, message:'Some pinned components aren\'t wired into the live circuit yet.' };
+    }
+
+    const Iamm  = Math.abs(ammEl.current);
+    const Vvolt = Math.abs(voltEl.drop);
+    const Ivolt = Math.abs(voltEl.current);
+    const Itgt  = Math.abs(tgtEl.current);
+    const Vtgt  = Math.abs(tgtEl.drop);
+
+    if (Iamm < 1e-4)   return { ok:false, message:`${ammId} isn't reading any current. An ammeter must be placed <b>in series</b> with ${tgtId}.` };
+    if (Ivolt > 1e-3 || Vvolt < 1e-3) {
+      return { ok:false, message:`${voltId} isn't correctly placed. A voltmeter must sit <b>in parallel across</b> ${tgtId}.` };
+    }
+    if (Math.abs(Iamm - Itgt) > tolI) {
+      return { ok:false, message:`${ammId} isn't measuring the current through ${tgtId}. Put it <b>in series with ${tgtId}</b>.` };
+    }
+    if (Math.abs(Vvolt - Vtgt) > tolV) {
+      return { ok:false, message:`${voltId} isn't measuring the p.d. across ${tgtId}. Connect it <b>directly across ${tgtId}</b>.` };
+    }
+    if (Math.abs(Iamm - expI) > tolI) {
+      return { ok:false, message:`The current through ${tgtId} should be about ${expI} A, but ${ammId} reads ${Iamm.toFixed(2)} A. Check the circuit.` };
+    }
+    if (Math.abs(Vvolt - expV) > tolV) {
+      return { ok:false, message:`The p.d. across ${tgtId} should be about ${expV} V, but ${voltId} reads ${Vvolt.toFixed(2)} V. Check the circuit.` };
+    }
+    const inferredR = Vvolt / Iamm;
+    if (Math.abs(inferredR - expR) > tolR) {
+      return { ok:false, message:`Your readings give R = ${Vvolt.toFixed(2)} / ${Iamm.toFixed(2)} = ${inferredR.toFixed(2)} Ω, which doesn't match the expected ${expR} Ω.` };
+    }
+    return {
+      ok: true,
+      message: `<b>Verified.</b> ${ammId} = ${Iamm.toFixed(2)} A, ${voltId} = ${Vvolt.toFixed(2)} V, so R = V / I = ${inferredR.toFixed(2)} Ω ≈ ${expR} Ω. ✔`
+    };
+  }
   if (sc.fault === 'break_in_loop') {
     if (s.isOpen) return { ok:true, message:'<b>Correct!</b> The circuit is open — no current can flow. Now repair it.' };
     return { ok:false, message:'The circuit is still live. Can you spot the break in the loop? If the circuit is already complete, try creating a break and explaining what happens.' };
@@ -220,16 +373,15 @@ function checkScenario(t) {
   return { ok:false, message:'Keep experimenting — Professor Volt can help.' };
 }
 
-export function nextTask() {
-  state.currentTaskIndex = Math.min(TASKS.length - 1, state.currentTaskIndex + 1);
-  renderTask();
-}
-export function prevTask() {
-  state.currentTaskIndex = Math.max(0, state.currentTaskIndex - 1);
-  renderTask();
+export function initTaskControls() {
+  document.getElementById('btn-open-tasks').onclick = openTaskModal;
+  const btn2 = document.getElementById('btn-open-tasks-2');
+  if (btn2) btn2.onclick = openTaskModal;
+  document.getElementById('btn-sandbox').onclick = enterSandbox;
 }
 
-export function initTaskControls() {
-  document.getElementById('btn-next-task').onclick = nextTask;
-  document.getElementById('btn-prev-task').onclick = prevTask;
+// Expose so the hint quick-button can ask about the active task only
+// (sandbox mode: no task context).
+export function getActiveTask() {
+  return activeTaskId ? TASKS.find(x => x.id === activeTaskId) : null;
 }

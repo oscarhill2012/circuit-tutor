@@ -248,6 +248,239 @@
         ],
         "relatedFacts": ["kb.series.voltage", "kb.parallel.voltage", "kb.fault.open_circuit"]
       }
+    },
+
+    {
+      "id": "sp-ser-beg",
+      "type": "measure",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Beginner",
+      "data": {
+        "brief": "Build a simple series circuit with the cell, bulb and ammeter, then read the current on A1.",
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",    "x": 300, "y": 300, "props": { "voltage": 6 } },
+            { "id": "L1", "type": "bulb",    "x": 700, "y": 300, "props": { "resistance": 6 } },
+            { "id": "A1", "type": "ammeter", "x": 700, "y": 500, "props": {} }
+          ],
+          "wires": [],
+          "locked": ["C1", "L1", "A1"]
+        },
+        "targetMeter": "A1",
+        "targetUnit": "A",
+        "correctAnswer": 1.0,
+        "tolerance": 0.05,
+        "hint": "In a series circuit the ammeter sits in the single loop. Use I = V / R.",
+        "explanation": "One loop: I = V / R = 6 V / 6 \u03a9 = 1 A. In series the current is the same everywhere."
+      }
+    },
+    {
+      "id": "sp-par-beg",
+      "type": "measure",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Beginner",
+      "data": {
+        "brief": "Wire the two bulbs in parallel across the 9 V cell and use V1 to measure the p.d. across bulb L1.",
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",      "x": 260, "y": 300, "props": { "voltage": 9 } },
+            { "id": "L1", "type": "bulb",      "x": 720, "y": 200, "props": { "resistance": 6 } },
+            { "id": "L2", "type": "bulb",      "x": 720, "y": 420, "props": { "resistance": 9 } },
+            { "id": "V1", "type": "voltmeter", "x": 980, "y": 200, "props": {} }
+          ],
+          "wires": [],
+          "locked": ["C1", "L1", "L2", "V1"]
+        },
+        "targetMeter": "V1",
+        "targetUnit": "V",
+        "correctAnswer": 9.0,
+        "tolerance": 0.2,
+        "hint": "The voltmeter goes in parallel across L1. Each parallel branch gets the full supply p.d.",
+        "explanation": "Each branch sits directly across the cell, so V across L1 = supply = 9 V."
+      }
+    },
+
+    {
+      "id": "sp-ser-int",
+      "type": "problem",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Intermediate",
+      "data": {
+        "question": "In a series circuit a resistor has 6 V across it and a current of 2 A flowing through it. What is its resistance?",
+        "correctAnswer": 3.0, "unit": "\u03a9",
+        "workingSteps": [
+          "In a series circuit the ammeter reading is the current through every component.",
+          "Apply Ohm's law: R = V / I",
+          "R = 6 / 2 = 3.0 \u03a9"
+        ],
+        "distractors": [12, 0.333, 8],
+        "hint": "Rearrange V = I \u00d7 R to make R the subject.",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "sp-par-int",
+      "type": "problem",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Intermediate",
+      "data": {
+        "question": "A branch in a parallel circuit has 12 V across it and a current of 3 A flowing through it. What is the branch resistance?",
+        "correctAnswer": 4.0, "unit": "\u03a9",
+        "workingSteps": [
+          "Each branch in parallel gets the full supply p.d., so V across the branch = 12 V.",
+          "Apply Ohm's law: R = V / I",
+          "R = 12 / 3 = 4.0 \u03a9"
+        ],
+        "distractors": [36, 0.25, 9],
+        "hint": "Ohm's law relates the branch current and the branch p.d. Rearrange for R.",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+
+    {
+      "id": "sp-ser-exp",
+      "type": "scenario",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Expert",
+      "data": {
+        "narrative": "You have a 12 V cell, a resistor R1, an ammeter A1 and a voltmeter V1. Build a series circuit that lets you measure both the current through R1 and the p.d. across R1.",
+        "challenge": "Verify that R1 is 4 \u03a9 using A1 and V1 with R = V / I.",
+        "parameters": { "supply_voltage": 12, "target_resistance": 4 },
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",      "x": 260, "y": 300, "props": { "voltage": 12 } },
+            { "id": "R1", "type": "resistor",  "x": 720, "y": 300, "props": { "resistance": 4 } },
+            { "id": "A1", "type": "ammeter",   "x": 480, "y": 300, "props": {} },
+            { "id": "V1", "type": "voltmeter", "x": 720, "y": 520, "props": {} }
+          ],
+          "wires": [],
+          "locked": ["C1", "R1", "A1", "V1"]
+        },
+        "successCriteria": {
+          "verify_ohms_law": true,
+          "ammeter": "A1",
+          "voltmeter": "V1",
+          "target_component": "R1",
+          "expected_current": 3.0,
+          "expected_voltage": 12.0,
+          "expected_resistance": 4.0,
+          "current_tol": 0.15,
+          "voltage_tol": 0.3,
+          "resistance_tol": 0.25
+        },
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.formula.ohms_law"]
+      }
+    },
+    {
+      "id": "sp-par-exp",
+      "type": "scenario",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Expert",
+      "data": {
+        "narrative": "Two resistors are connected in parallel across a 12 V cell: R1 (the branch you care about) and R2 (a second branch). A1 should read the current through R1 only, and V1 should read the p.d. across R1.",
+        "challenge": "Verify that R1 is 6 \u03a9 using the branch readings on A1 and V1 with R = V / I.",
+        "parameters": { "supply_voltage": 12, "target_resistance": 6, "other_branch": 12 },
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",      "x": 260, "y": 360, "props": { "voltage": 12 } },
+            { "id": "R1", "type": "resistor",  "x": 820, "y": 240, "props": { "resistance": 6 } },
+            { "id": "R2", "type": "resistor",  "x": 820, "y": 480, "props": { "resistance": 12 } },
+            { "id": "A1", "type": "ammeter",   "x": 600, "y": 240, "props": {} },
+            { "id": "V1", "type": "voltmeter", "x": 1060, "y": 240, "props": {} }
+          ],
+          "wires": [],
+          "locked": ["C1", "R1", "R2", "A1", "V1"]
+        },
+        "successCriteria": {
+          "verify_ohms_law": true,
+          "ammeter": "A1",
+          "voltmeter": "V1",
+          "target_component": "R1",
+          "expected_current": 2.0,
+          "expected_voltage": 12.0,
+          "expected_resistance": 6.0,
+          "current_tol": 0.15,
+          "voltage_tol": 0.3,
+          "resistance_tol": 0.3
+        },
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.formula.ohms_law"]
+      }
+    },
+
+    {
+      "id": "sp-exp-series-bright",
+      "type": "exploration",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Beginner",
+      "data": {
+        "concept": "Bulb brightness in a series circuit",
+        "interactiveElements": ["circuit-canvas"],
+        "guidedQuestions": [
+          "Build a single bulb in a loop with a cell. Now add a second identical bulb in series. Does each bulb look brighter or dimmer than before?",
+          "What happens to the ammeter reading when you add the second bulb in series?",
+          "If adding a bulb adds resistance, what does Ohm's law predict about the current?",
+          "The current is the same through every component in a series loop \u2014 why does that make the bulbs equally dim?"
+        ],
+        "discoveryGoals": [
+          "Current is the same everywhere in a series circuit.",
+          "Adding series components increases total resistance, so current drops.",
+          "Lower current means bulbs in series are dimmer than a single bulb alone."
+        ],
+        "relatedFacts": ["kb.series.current", "kb.formula.ohms_law"]
+      }
+    },
+    {
+      "id": "sp-exp-parallel-bright",
+      "type": "exploration",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Intermediate",
+      "data": {
+        "concept": "Bulb brightness in a parallel circuit",
+        "interactiveElements": ["circuit-canvas"],
+        "guidedQuestions": [
+          "Build one bulb across a cell. Now add a second identical bulb in parallel with the first. Does the first bulb change brightness?",
+          "What does a voltmeter across each branch read, compared to the supply?",
+          "Use an ammeter in each branch and an ammeter in the main loop \u2014 how do the branch currents relate to the total current?",
+          "Why can bulbs in parallel stay just as bright, even when you add more of them?"
+        ],
+        "discoveryGoals": [
+          "Each parallel branch gets the full supply p.d.",
+          "Branch currents add together to make the total current.",
+          "Because p.d. across each branch is unchanged, bulbs in parallel stay bright."
+        ],
+        "relatedFacts": ["kb.parallel.voltage", "kb.parallel.current"]
+      }
+    },
+    {
+      "id": "sp-exp-meters",
+      "type": "exploration",
+      "topicId": "series-parallel",
+      "topicName": "Series and Parallel Circuits",
+      "difficulty": "Expert",
+      "data": {
+        "concept": "Real ammeters and voltmeters are not perfect",
+        "interactiveElements": ["circuit-canvas"],
+        "guidedQuestions": [
+          "An ideal ammeter has zero resistance. What would happen to the current in a simple loop if the ammeter actually had a small resistance of, say, 1 \u03a9?",
+          "An ideal voltmeter has infinite resistance. If a real voltmeter had a finite resistance, how could it draw a small current through itself when connected across a component?",
+          "Place a voltmeter across a component in your circuit. Could its presence slightly change the p.d. it is trying to measure? Why or why not?",
+          "Overall: in what way might using a real meter perturb the very quantity you are trying to measure?"
+        ],
+        "discoveryGoals": [
+          "A real ammeter's non-zero resistance slightly reduces the current it is measuring.",
+          "A real voltmeter's non-infinite resistance draws a small current, which can slightly lower the p.d. across the component.",
+          "Measuring instruments can disturb the circuit \u2014 good measurements rely on meters being close to ideal."
+        ],
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement"]
+      }
     }
   ]
 }

@@ -1,7 +1,7 @@
 /* Layout */
 .app {
   display: grid;
-  grid-template-columns: 240px 1fr 360px;
+  grid-template-columns: 240px 1fr 440px;
   grid-template-rows: 52px 1fr;
   height: 100vh;
   gap: 0;
@@ -129,29 +129,34 @@
 #canvas.wiring, #canvas.wiring .wire { cursor: crosshair !important; }
 #canvas.wiring .wire { pointer-events: none; }
 
-/* Right side: tutor + tasks */
+/* Right side: tutor full-height (tasks moved to central modal) */
 .rightcol {
-  display: grid; grid-template-rows: auto 1fr;
+  display: grid; grid-template-rows: 1fr;
   background: var(--panel); border-left: 1px solid var(--line);
   overflow: hidden;
 }
-.tasks {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
+
+/* Floating active-task widget sits at top-center of the canvas while
+   a task is in progress. Hidden in sandbox mode. */
+.task-widget {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  width: min(560px, calc(100% - 24px));
+  background: rgba(19,26,46,0.95); backdrop-filter: blur(8px);
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; z-index: 6;
+  max-height: calc(100% - 24px); overflow-y: auto;
 }
-.tasks .hd { display:flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.tasks .hd h3 { margin:0; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
-.tasks .progress {
-  height: 4px; background: var(--panel-2); border-radius: 2px; overflow: hidden;
-  margin-bottom: 12px;
+.task-widget.hidden { display: none; }
+.task-widget-hd {
+  display:flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px; font-size: 11px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
 }
-.tasks .progress > div {
-  height: 100%; background: linear-gradient(90deg, var(--accent), var(--info));
-  width: 0%; transition: width 500ms ease;
-}
+
 .task-card {
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
-  padding: 12px; font-size: 13px; line-height: 1.45;
+  background: transparent; border: none; border-radius: 10px;
+  padding: 0; font-size: 13px; line-height: 1.45;
 }
 .task-card .pill {
   display: inline-block; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
@@ -262,6 +267,22 @@
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
   padding: 24px; max-width: 480px; width: 100%;
 }
+.modal-card.modal-card-wide { max-width: 720px; max-height: 85vh; overflow-y: auto; }
+.task-list {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  margin: 12px 0;
+}
+.task-list .task-list-item {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; cursor: pointer; text-align: left; font: inherit; color: inherit;
+  display: flex; flex-direction: column; gap: 4px;
+  transition: border-color 120ms ease;
+}
+.task-list .task-list-item:hover { border-color: var(--accent); }
+.task-list .task-list-item.done { border-color: rgba(45,226,179,0.4); }
+.task-list .task-list-item .tl-topic { font-size: 11px; color: var(--info); font-family: 'JetBrains Mono', monospace; }
+.task-list .task-list-item .tl-title { font-size: 13px; color: var(--text); }
+.task-list .task-list-item .tl-meta { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
 .modal-card h2 { margin: 0 0 8px; font-size: 18px; }
 .modal-card p { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
 .modal-card input {
@@ -278,7 +299,7 @@
 
 /* Responsive */
 @media (max-width: 1100px) {
-  .app { grid-template-columns: 200px 1fr 320px; }
+  .app { grid-template-columns: 200px 1fr 380px; }
 }
 @media (max-width: 900px) {
   .app {

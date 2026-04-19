@@ -2,7 +2,7 @@
 // clear-chat and greet. Also owns the KaTeX inline renderer for $…$ spans.
 
 import { state } from '../state/store.js';
-import { TASKS, escapeHtml } from '../tasks/engine.js';
+import { escapeHtml, getActiveTask } from '../tasks/engine.js';
 import { askTutor } from '../tutor/api.js';
 
 export function pushUserMsg(text) {
@@ -63,14 +63,6 @@ function renderWithKatex(text) {
 
 function scrollMsgs() { const el = document.getElementById('messages'); el.scrollTop = el.scrollHeight; }
 
-export function greet() {
-  appendTutorMsg({
-    reply_type:'direct_explanation',
-    assistant_text:`Welcome! I'm **Professor Volt**, your Socratic tutor for GCSE circuits. I'll ask short questions and help you learn by experimenting. Try the challenge on the right — or build your own circuit.`,
-    follow_up_question:`What shall we tackle first?`,
-  });
-}
-
 export function initTutorPanel() {
   document.getElementById('chat-send').onclick = () => {
     const input = document.getElementById('chat-input');
@@ -82,21 +74,20 @@ export function initTutorPanel() {
   document.getElementById('chat-input').addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') document.getElementById('chat-send').click();
   });
+  // Only a single quick-action remains: ask for a hint. All other
+  // interaction with Professor Volt happens through the typed prompt.
   document.querySelectorAll('.tutor-quick button').forEach(b => {
     b.onclick = () => {
-      const t = TASKS[state.currentTaskIndex];
-      const map = {
-        hint: t ? `Give me a single small hint for the current challenge. Don't tell me the answer.` : `Give me a small hint about what to try.`,
-        check: `Look at my current circuit and tell me if there's a mistake or an improvement I should make.`,
-        explain: t ? `Briefly explain the key idea of the current topic in one or two sentences suitable for GCSE.` : `Briefly explain Ohm's law.`,
-      };
-      askTutor(map[b.dataset.quick]);
+      const t = getActiveTask();
+      const msg = t
+        ? `Give me a single small hint for the current task. Don't tell me the answer.`
+        : `I'm exploring in sandbox mode — give me a small prompt or idea to try.`;
+      askTutor(msg);
     };
   });
   document.getElementById('btn-clear-chat').onclick = () => {
     state.messages = [];
     document.getElementById('messages').innerHTML = '';
-    greet();
   };
   document.getElementById('btn-help').onclick = () => {
     appendTutorMsg({
