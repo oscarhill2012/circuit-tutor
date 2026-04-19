@@ -1,9 +1,8 @@
 """Circuit-state validator.
 
-NOTE: This file mirrors backend/circuit_validator.py. The duplicate exists
-because Vercel's Python runtime only deploys files under frontend/api/ (plus
-their local imports). Keep the two in sync. Tests live alongside the backend
-copy at backend/tests/test_circuit_validator.py.
+Runs inside the Vercel Python serverless function at /api/tutor. tutor.py
+calls analyse() server-side on every request so the grounding context sent
+to the LLM is authoritative (not whatever the client sent).
 
 Models the circuit as a terminal/net graph:
   - Each component type exposes named terminals (cell.+, cell.-, bulb.a, bulb.b, ...).

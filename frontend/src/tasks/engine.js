@@ -1,127 +1,21 @@
-// Challenge engine: flattens TOOL_DATA topics into a task list and renders
-// the task card (multiple choice, scenario check, exploration) into the
-// right-hand panel.
+// Task engine: loads the ordered task list from frontend/src/data/tasks.json
+// at boot, then renders the current task card into the right-hand panel.
+// Supported task types: measure (build-and-read a meter), problem (multiple
+// choice), scenario (check circuit against criteria), exploration (free).
 
 import { state } from '../state/store.js';
-import { TOOL_DATA } from '../circuit/schema.js';
 import { askTutorAbout } from '../tutor/api.js';
 import { loadInitialCircuit } from '../state/actions.js';
 
-// --- Build-and-measure tasks ---------------------------------------------
-// Each task pre-loads a minimal circuit (a cell and a few fixed components)
-// and asks the student to finish wiring it up and read a meter to answer.
-// Locked component ids cannot be deleted — they are the scaffolding.
-const MEASURE_TASKS = [
-  {
-    id: 'mes-1',
-    type: 'measure',
-    topicId: 'meters',
-    topicName: 'Ohm\u2019s law \u00b7 measure',
-    difficulty: 'beginner',
-    data: {
-      brief: 'Complete the circuit so the ammeter reads the current through the resistor. Then type the reading below.',
-      initial: {
-        components: [
-          { id: 'C1', type: 'cell',     x: 300, y: 300, props: { voltage: 6 } },
-          { id: 'R1', type: 'resistor', x: 700, y: 300, props: { resistance: 3 } },
-          { id: 'A1', type: 'ammeter',  x: 700, y: 500, props: {} },
-        ],
-        wires: [],
-        locked: ['C1', 'R1', 'A1'],
-      },
-      targetMeter: 'A1',
-      targetUnit: 'A',
-      correctAnswer: 2.0,
-      tolerance: 0.05,
-      hint: 'The ammeter must be in series with R1. Form one complete loop.',
-      explanation: 'I = V / R = 6 V / 3 \u03a9 = 2 A.',
-    },
-  },
-  {
-    id: 'mes-2',
-    type: 'measure',
-    topicId: 'meters',
-    topicName: 'Voltmeter placement',
-    difficulty: 'beginner',
-    data: {
-      brief: 'Connect the cell and voltmeter so V1 reads the p.d. across the bulb. Then type the reading.',
-      initial: {
-        components: [
-          { id: 'C1', type: 'cell',      x: 300, y: 300, props: { voltage: 6 } },
-          { id: 'L1', type: 'bulb',      x: 700, y: 300, props: { resistance: 6 } },
-          { id: 'V1', type: 'voltmeter', x: 700, y: 500, props: {} },
-        ],
-        wires: [],
-        locked: ['C1', 'L1', 'V1'],
-      },
-      targetMeter: 'V1',
-      targetUnit: 'V',
-      correctAnswer: 6.0,
-      tolerance: 0.2,
-      hint: 'A voltmeter goes in parallel across the component you want to measure.',
-      explanation: 'With only one bulb in the loop the full supply p.d. sits across it: 6 V.',
-    },
-  },
-  {
-    id: 'mes-3',
-    type: 'measure',
-    topicId: 'series-circuits',
-    topicName: 'Series current',
-    difficulty: 'beginner',
-    data: {
-      brief: 'Finish the series loop of two resistors (2 \u03a9 and 4 \u03a9) and an ammeter. What current does A1 read?',
-      initial: {
-        components: [
-          { id: 'C1', type: 'cell',     x: 260, y: 280, props: { voltage: 6 } },
-          { id: 'R1', type: 'resistor', x: 560, y: 280, props: { resistance: 2 } },
-          { id: 'R2', type: 'resistor', x: 860, y: 280, props: { resistance: 4 } },
-          { id: 'A1', type: 'ammeter',  x: 560, y: 500, props: {} },
-        ],
-        wires: [],
-        locked: ['C1', 'R1', 'R2', 'A1'],
-      },
-      targetMeter: 'A1',
-      targetUnit: 'A',
-      correctAnswer: 1.0,
-      tolerance: 0.05,
-      hint: 'In series, add the resistances. Then use I = V / R_total.',
-      explanation: 'R_total = 2 + 4 = 6 \u03a9. I = 6 / 6 = 1 A. In series the current is the same everywhere.',
-    },
-  },
-  {
-    id: 'mes-4',
-    type: 'measure',
-    topicId: 'parallel-circuits',
-    topicName: 'Parallel total current',
-    difficulty: 'intermediate',
-    data: {
-      brief: 'Wire the two resistors in parallel across the cell, with the ammeter measuring the TOTAL current from the cell. Enter A1\'s reading.',
-      initial: {
-        components: [
-          { id: 'C1', type: 'cell',     x: 260, y: 300, props: { voltage: 12 } },
-          { id: 'A1', type: 'ammeter',  x: 460, y: 300, props: {} },
-          { id: 'R1', type: 'resistor', x: 720, y: 200, props: { resistance: 4 } },
-          { id: 'R2', type: 'resistor', x: 720, y: 420, props: { resistance: 6 } },
-        ],
-        wires: [],
-        locked: ['C1', 'A1', 'R1', 'R2'],
-      },
-      targetMeter: 'A1',
-      targetUnit: 'A',
-      correctAnswer: 5.0,
-      tolerance: 0.1,
-      hint: 'The supply p.d. sits across each branch. Total I = I\u2081 + I\u2082.',
-      explanation: 'I\u2081 = 12 / 4 = 3 A, I\u2082 = 12 / 6 = 2 A, I_total = 5 A.',
-    },
-  },
-];
+export const TASKS = [];
 
-// Flatten topics into an ordered task list, with the measure-tasks first.
-export const TASKS = [...MEASURE_TASKS];
-for (const topic of TOOL_DATA.content.topics) {
-  for (const item of topic.items) {
-    TASKS.push({ topicId: topic.id, topicName: topic.name, ...item });
-  }
+export async function loadTasks() {
+  const res = await fetch('./src/data/tasks.json', { cache: 'no-cache' });
+  if (!res.ok) throw new Error(`Failed to load tasks.json (${res.status})`);
+  const data = await res.json();
+  TASKS.length = 0;
+  for (const t of data.tasks) TASKS.push(t);
+  return TASKS;
 }
 
 export function escapeHtml(s) {
@@ -129,7 +23,6 @@ export function escapeHtml(s) {
 }
 
 function shuffleSeed(arr, seed) {
-  // simple deterministic shuffle
   let h = 0; for (const ch of seed) h = (h*31 + ch.charCodeAt(0)) & 0xffff;
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -140,19 +33,22 @@ function shuffleSeed(arr, seed) {
   return a;
 }
 
+function updateProgressBar() {
+  const el = document.getElementById('prog-bar');
+  if (el && TASKS.length) el.style.width = (state.tasksCompleted.size / TASKS.length * 100) + '%';
+}
+
 export function renderTask() {
   const card = document.getElementById('task-card');
   const t = TASKS[state.currentTaskIndex];
   if (!t) { card.innerHTML = '<p>No tasks.</p>'; return; }
 
-  // For measure tasks, auto-load the pinned starter circuit the first time
-  // the student lands on this task (or when they click "Reset task").
   if (t.type === 'measure' && state.loadedTaskId !== t.id) {
     loadInitialCircuit(t.data.initial, t.id);
   }
 
   const done = state.tasksCompleted.has(t.id);
-  document.getElementById('prog-bar').style.width = (state.tasksCompleted.size / TASKS.length * 100) + '%';
+  updateProgressBar();
 
   if (t.type === 'measure') {
     card.innerHTML = `
@@ -200,7 +96,7 @@ export function renderTask() {
         state.tasksCompleted.add(t.id);
         fb.className = 'feedback show good';
         fb.innerHTML = `<b>Correct!</b> ${escapeHtml(t.data.explanation)}`;
-        document.getElementById('prog-bar').style.width = (state.tasksCompleted.size / TASKS.length * 100) + '%';
+        updateProgressBar();
       } else if (!matchesActual) {
         fb.className = 'feedback show bad';
         fb.innerHTML = `Your typed value (${userVal.toFixed(2)} ${t.data.targetUnit}) doesn\u2019t match what ${t.data.targetMeter} is showing (${actual.toFixed(2)} ${t.data.targetUnit}). Re-read the meter.`;
@@ -241,7 +137,7 @@ export function renderTask() {
           state.tasksCompleted.add(t.id);
           fb.className = 'feedback show good';
           fb.innerHTML = `<b>Correct!</b> Working:<ol>${t.data.workingSteps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol>`;
-          document.getElementById('prog-bar').style.width = (state.tasksCompleted.size / TASKS.length * 100) + '%';
+          updateProgressBar();
         } else {
           fb.className = 'feedback show bad';
           fb.innerHTML = `<b>Not quite.</b> Try again, or ask Professor Volt for a hint.`;
@@ -270,7 +166,7 @@ export function renderTask() {
       fb.className = 'feedback show ' + (res.ok ? 'good' : 'bad');
       fb.innerHTML = res.message;
       if (res.ok) state.tasksCompleted.add(t.id);
-      document.getElementById('prog-bar').style.width = (state.tasksCompleted.size / TASKS.length * 100) + '%';
+      updateProgressBar();
     };
     document.getElementById('btn-ask-tutor').onclick = () => askTutorAbout(`I'm on this challenge: ${t.data.challenge}. ${t.data.narrative}`);
   } else if (t.type === 'exploration') {
@@ -287,7 +183,7 @@ export function renderTask() {
     `;
     document.getElementById('btn-mark-done').onclick = () => {
       state.tasksCompleted.add(t.id);
-      document.getElementById('prog-bar').style.width = (state.tasksCompleted.size / TASKS.length * 100) + '%';
+      updateProgressBar();
       nextTask();
     };
     document.getElementById('btn-ask-tutor').onclick = () => askTutorAbout(`I'm exploring: ${t.data.concept}. ${t.data.guidedQuestions[0]}`);

@@ -8,18 +8,20 @@ import { render } from './circuit/renderer.js';
 import { initCanvasInteractions } from './circuit/editor.js';
 import { initPalette } from './ui/palette.js';
 import { initTools, initKeyboard, updateReadout } from './ui/canvas.js';
-import { renderTask, initTaskControls } from './tasks/engine.js';
+import { renderTask, initTaskControls, loadTasks } from './tasks/engine.js';
 import { initTutorPanel, greet } from './ui/tutorPanel.js';
 
 export { state };
 
-export function boot() {
+export async function boot() {
   initPalette();
   initTools();
   initKeyboard();
   initCanvasInteractions();
   initTaskControls();
   initTutorPanel();
+
+  try { await loadTasks(); } catch (err) { console.error('Task load failed:', err); }
 
   // Starter: give students a live example.
   // Lay the starter out as a visible rectangular loop so students see the

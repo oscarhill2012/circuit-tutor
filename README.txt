@@ -20,21 +20,22 @@ Topics covered:
 
 STRUCTURE
 ---------
-  backend/
-    tool.json              - Content, AI config, knowledge base, scoring rules
-    circuit_validator.py   - Physics validation logic
-    generate.py            - Problem generation utilities
-    knowledge_base.py      - KB access helpers
-    tests/                 - Unit tests
-
   frontend/
-    index.html             - Main app (self-contained)
-    physics.js             - Client-side physics simulation
+    index.html               - Main app (self-contained)
+    src/
+      data/
+        tasks.json            - Ordered task list (edit to add/remove tasks)
+        knowledgeBase.js      - Curated GCSE KB + pinned safeguarding (client retrieval)
+      sim/physics.js          - Client-side physics simulation
+      tasks/engine.js         - Task card renderer
+      tutor/api.js            - Tutor HTTP client (posts to /api/tutor)
+      circuit/ state/ ui/     - Editor, renderer, state store, panels
     api/
-      tutor.py             - Vercel serverless function (AI tutor endpoint)
-      circuit_validator.py - Serverless circuit validation
-    vercel.json            - Vercel deployment config
-    requirements.txt       - Python dependencies for serverless functions
+      tutor.py                - Vercel serverless function (AI tutor endpoint)
+      circuit_validator.py    - Server-side circuit analysis (grounding)
+      knowledge_base.json     - KB loaded by tutor.py; mirrors knowledgeBase.js
+    vercel.json              - Vercel deployment config
+    requirements.txt         - Python dependencies for serverless functions
 
 DEPLOYMENT
 ----------

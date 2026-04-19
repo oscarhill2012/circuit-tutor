@@ -3,46 +3,87 @@
 // from the tutor's visual_instructions array.
 
 import { state } from '../state/store.js';
-import { TOOL_DATA } from '../circuit/schema.js';
 import { applyVisualInstructions } from '../circuit/renderer.js';
 import { TASKS } from '../tasks/engine.js';
 import { pushUserMsg, appendThinking, removeThinking, appendTutorMsg } from '../ui/tutorPanel.js';
+import { PINNED, retrieve } from '../data/knowledgeBase.js';
 
 const TUTOR_URL = '/api/tutor';
 
+// Context-window caps.
+const HISTORY_TURNS = 4;                 // last N raw turns sent as recent_history
+const HISTORY_CHAR_CAP = 500;            // truncate each history entry's content
+const RETRIEVED_KB_LIMIT = 8;            // top-N retrieved snippets (pinned always sent on top)
+const MAX_COMPONENTS_IN_SNAPSHOT = 40;   // defensive cap for pathological circuits
+const MAX_WIRES_IN_SNAPSHOT = 80;
+const MAX_READINGS_IN_SNAPSHOT = 40;
+
 function circuitSnapshot() {
-  const comps = state.components.map(c => ({
+  const comps = state.components.slice(0, MAX_COMPONENTS_IN_SNAPSHOT).map(c => ({
     id: c.id, type: c.type, props: c.props,
   }));
-  const wires = state.wires.map(w => ({ id: w.id, from: `${w.a.compId}.${w.a.term}`, to: `${w.b.compId}.${w.b.term}` }));
-  const meters = state.components.filter(c => c.type==='ammeter'||c.type==='voltmeter').map(m => ({
-    id: m.id, type: m.type,
+  const wires = state.wires.slice(0, MAX_WIRES_IN_SNAPSHOT).map(w => ({
+    id: w.id, from: `${w.a.compId}.${w.a.term}`, to: `${w.b.compId}.${w.b.term}`,
   }));
+  const meters = state.components
+    .filter(c => c.type === 'ammeter' || c.type === 'voltmeter')
+    .slice(0, MAX_COMPONENTS_IN_SNAPSHOT)
+    .map(m => ({ id: m.id, type: m.type }));
   let readings = {};
   if (state.sim && state.sim.ok && !state.sim.empty) {
     readings = {
-      status: state.sim.isOpen ? 'open' : 'live',
+      status: state.sim.isOpen ? 'open' : (state.sim.isShort ? 'short' : 'live'),
       supplyV: state.sim.supplyV || 0,
       totalI: state.sim.totalI || 0,
-      components: state.sim.elements.map(e => ({
-        id: e.comp.id, current: Number((e.current||0).toFixed(4)), drop: Number((e.drop||0).toFixed(4))
+      components: state.sim.elements.slice(0, MAX_READINGS_IN_SNAPSHOT).map(e => ({
+        id: e.comp.id,
+        current: Number((e.current || 0).toFixed(4)),
+        drop: Number((e.drop || 0).toFixed(4)),
       })),
     };
   }
-  return { components: comps, wires, meters, readings };
+  return {
+    components: comps,
+    wires,
+    meters,
+    readings,
+    truncated: state.components.length > MAX_COMPONENTS_IN_SNAPSHOT
+            || state.wires.length > MAX_WIRES_IN_SNAPSHOT,
+  };
+}
+
+function truncateHistory(messages) {
+  return messages.slice(-HISTORY_TURNS).map(m => {
+    const raw = typeof m.content === 'string'
+      ? m.content
+      : (m.content.assistant_text || JSON.stringify(m.content));
+    const content = raw.length > HISTORY_CHAR_CAP
+      ? raw.slice(0, HISTORY_CHAR_CAP) + '…'
+      : raw;
+    return { role: m.role, content };
+  });
 }
 
 function buildUserPayload(studentMessage) {
   const t = TASKS[state.currentTaskIndex];
-  const recent = state.messages.slice(-4).map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : m.content.assistant_text || JSON.stringify(m.content) }));
-  const rag = TOOL_DATA.reference.knowledgeBase.slice(0, 12); // send subset to keep payload small
+  const recent = truncateHistory(state.messages);
+
+  // Pinned safeguarding + foundational rules are ALWAYS sent on every turn.
+  // Retrieved snippets are ranked per-turn against the student's message and
+  // current task topic.
+  const retrieved = retrieve(studentMessage, {
+    topic: t ? t.topicId : null,
+    limit: RETRIEVED_KB_LIMIT,
+  });
+  const knowledge_snippets = [...PINNED, ...retrieved];
+
   return JSON.stringify({
     student_message: studentMessage,
     circuit_state: circuitSnapshot(),
     selected: state.selectedId,
     current_task: t ? { id: t.id, topic: t.topicId, type: t.type, difficulty: t.difficulty, data: t.data } : null,
     recent_history: recent,
-    knowledge_snippets: rag,
+    knowledge_snippets,
     rolling_summary: state.rollingSummary || '',
   });
 }
@@ -64,6 +105,10 @@ export async function askTutor(message) {
     const data = await res.json();
     const parsed = data.reply || { reply_type:'direct_explanation', assistant_text: 'No reply.' };
     state.lastAnalysis = data.analysis || null;
+    // Tutor-authored rolling summary — see tutor.py OUTPUT CONTRACT.
+    if (typeof parsed.rolling_summary === 'string' && parsed.rolling_summary.trim()) {
+      state.rollingSummary = parsed.rolling_summary.trim();
+    }
     removeThinking(thinkingId);
     appendTutorMsg(parsed);
     applyVisualInstructions(parsed.visual_instructions || []);

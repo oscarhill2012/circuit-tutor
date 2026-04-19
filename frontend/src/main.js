@@ -3,4 +3,4 @@
 
 import { boot } from './app.js';
 
-boot();
+boot();  // boot is async; we fire-and-forget here, errors surface in the tutor panel / console.

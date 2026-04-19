@@ -10,7 +10,8 @@
 
 import { state } from '../state/store.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
-import { render, svg, routeWire, rerouteWiresFor, keyOfTerm } from './renderer.js';
+import { render, svg, routeWire, rerouteWiresFor, keyOfTerm, manhattanPath } from './renderer.js';
+import { termPos } from './geometry.js';
 import { updateReadout } from '../ui/canvas.js';
 import { createValidator } from './wiring/validation.js';
 import { createWireInteractionController } from './wiring/controller.js';
@@ -39,9 +40,25 @@ const controller = createWireInteractionController({
     simulate();
     return wire.id;
   },
-  onChange({ status, pending, invalidHover }) {
+  onChange({ status, pending, invalidHover, previewMove }) {
     state.pendingWire = pending;
     editor.invalidHoverKey = invalidHover ? keyOfTerm(invalidHover.compId, invalidHover.term) : null;
+    svg.classList.toggle('wiring', !!pending);
+    // Pointer-move updates while a wire is pending are extremely frequent.
+    // Doing a full SVG rebuild on every move destroys the terminal element
+    // under the cursor — which was making the second click fiddly and caused
+    // the cursor to flicker as hover states were rebuilt from scratch.
+    // For pure preview-follow updates, mutate the existing preview path's `d`
+    // attribute in place instead.
+    if (previewMove && pending && editor.previewEl) {
+      const ca = state.components.find(c => c.id === pending.from.compId);
+      if (ca) {
+        const p1 = termPos(ca, pending.from.term);
+        const p2 = { x: pending.mouseX, y: pending.mouseY };
+        editor.previewEl.setAttribute('d', manhattanPath(p1, p2));
+      }
+      return;
+    }
     render();
   },
   onReject(port, reason) {

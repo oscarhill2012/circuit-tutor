@@ -210,7 +210,10 @@ export function render() {
     if (ca) {
       const p1 = termPos(ca, state.pendingWire.from.term);
       const p2 = { x: state.pendingWire.mouseX, y: state.pendingWire.mouseY };
-      editor.previewEl = svgEl('path', { class:'wire preview', d: manhattanPath(p1,p2) });
+      editor.previewEl = svgEl('path', {
+        class: 'wire preview', d: manhattanPath(p1, p2),
+        'pointer-events': 'none',
+      });
       svg.appendChild(editor.previewEl);
     }
   }

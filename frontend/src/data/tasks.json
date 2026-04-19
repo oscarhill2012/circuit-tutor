@@ -1,0 +1,253 @@
+{
+  "_doc": "Ordered list of Circuit Tutor tasks. Each task has: id, type (measure|problem|scenario|exploration), topicId, topicName, difficulty, data. Measure tasks pre-load a scaffold circuit with locked component ids. Edit this file to add/remove/reorder tasks.",
+  "tasks": [
+    {
+      "id": "mes-1",
+      "type": "measure",
+      "topicId": "meters",
+      "topicName": "Ohm\u2019s law \u00b7 measure",
+      "difficulty": "beginner",
+      "data": {
+        "brief": "Complete the circuit so the ammeter reads the current through the resistor. Then type the reading below.",
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",     "x": 300, "y": 300, "props": { "voltage": 6 } },
+            { "id": "R1", "type": "resistor", "x": 700, "y": 300, "props": { "resistance": 3 } },
+            { "id": "A1", "type": "ammeter",  "x": 700, "y": 500, "props": {} }
+          ],
+          "wires": [],
+          "locked": ["C1", "R1", "A1"]
+        },
+        "targetMeter": "A1",
+        "targetUnit": "A",
+        "correctAnswer": 2.0,
+        "tolerance": 0.05,
+        "hint": "The ammeter must be in series with R1. Form one complete loop.",
+        "explanation": "I = V / R = 6 V / 3 \u03a9 = 2 A."
+      }
+    },
+    {
+      "id": "mes-2",
+      "type": "measure",
+      "topicId": "meters",
+      "topicName": "Voltmeter placement",
+      "difficulty": "beginner",
+      "data": {
+        "brief": "Connect the cell and voltmeter so V1 reads the p.d. across the bulb. Then type the reading.",
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",      "x": 300, "y": 300, "props": { "voltage": 6 } },
+            { "id": "L1", "type": "bulb",      "x": 700, "y": 300, "props": { "resistance": 6 } },
+            { "id": "V1", "type": "voltmeter", "x": 700, "y": 500, "props": {} }
+          ],
+          "wires": [],
+          "locked": ["C1", "L1", "V1"]
+        },
+        "targetMeter": "V1",
+        "targetUnit": "V",
+        "correctAnswer": 6.0,
+        "tolerance": 0.2,
+        "hint": "A voltmeter goes in parallel across the component you want to measure.",
+        "explanation": "With only one bulb in the loop the full supply p.d. sits across it: 6 V."
+      }
+    },
+    {
+      "id": "mes-3",
+      "type": "measure",
+      "topicId": "series-circuits",
+      "topicName": "Series current",
+      "difficulty": "beginner",
+      "data": {
+        "brief": "Finish the series loop of two resistors (2 \u03a9 and 4 \u03a9) and an ammeter. What current does A1 read?",
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",     "x": 260, "y": 280, "props": { "voltage": 6 } },
+            { "id": "R1", "type": "resistor", "x": 560, "y": 280, "props": { "resistance": 2 } },
+            { "id": "R2", "type": "resistor", "x": 860, "y": 280, "props": { "resistance": 4 } },
+            { "id": "A1", "type": "ammeter",  "x": 560, "y": 500, "props": {} }
+          ],
+          "wires": [],
+          "locked": ["C1", "R1", "R2", "A1"]
+        },
+        "targetMeter": "A1",
+        "targetUnit": "A",
+        "correctAnswer": 1.0,
+        "tolerance": 0.05,
+        "hint": "In series, add the resistances. Then use I = V / R_total.",
+        "explanation": "R_total = 2 + 4 = 6 \u03a9. I = 6 / 6 = 1 A. In series the current is the same everywhere."
+      }
+    },
+    {
+      "id": "mes-4",
+      "type": "measure",
+      "topicId": "parallel-circuits",
+      "topicName": "Parallel total current",
+      "difficulty": "intermediate",
+      "data": {
+        "brief": "Wire the two resistors in parallel across the cell, with the ammeter measuring the TOTAL current from the cell. Enter A1's reading.",
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",     "x": 260, "y": 300, "props": { "voltage": 12 } },
+            { "id": "A1", "type": "ammeter",  "x": 460, "y": 300, "props": {} },
+            { "id": "R1", "type": "resistor", "x": 720, "y": 200, "props": { "resistance": 4 } },
+            { "id": "R2", "type": "resistor", "x": 720, "y": 420, "props": { "resistance": 6 } }
+          ],
+          "wires": [],
+          "locked": ["C1", "A1", "R1", "R2"]
+        },
+        "targetMeter": "A1",
+        "targetUnit": "A",
+        "correctAnswer": 5.0,
+        "tolerance": 0.1,
+        "hint": "The supply p.d. sits across each branch. Total I = I\u2081 + I\u2082.",
+        "explanation": "I\u2081 = 12 / 4 = 3 A, I\u2082 = 12 / 6 = 2 A, I_total = 5 A."
+      }
+    },
+    {
+      "id": "cvr-1", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Current, voltage and resistance", "difficulty": "beginner",
+      "data": {
+        "question": "A 6 V cell is connected in a series loop with a 2 \u03a9 resistor. What is the current in the circuit?",
+        "correctAnswer": 3.0, "unit": "A",
+        "workingSteps": ["Apply Ohm's law: V = I \u00d7 R, so I = V / R", "I = 6 / 2", "I = 3.0 A"],
+        "distractors": [12, 0.333, 8],
+        "hint": "What equation links voltage, current and resistance?",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "cvr-2", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Current, voltage and resistance", "difficulty": "beginner",
+      "data": {
+        "question": "A 12 V cell is connected in a series loop with a 4 \u03a9 resistor. What is the current in the circuit?",
+        "correctAnswer": 3.0, "unit": "A",
+        "workingSteps": ["Apply Ohm's law: V = I \u00d7 R, so I = V / R", "I = 12 / 4", "I = 3.0 A"],
+        "distractors": [48, 0.333, 16],
+        "hint": "What equation links voltage, current and resistance?",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "cvr-3", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Current, voltage and resistance", "difficulty": "intermediate",
+      "data": {
+        "question": "A 9 V cell is connected in a series loop with a 15 \u03a9 resistor. What is the current in the circuit?",
+        "correctAnswer": 0.6, "unit": "A",
+        "workingSteps": ["Apply Ohm's law: V = I \u00d7 R, so I = V / R", "I = 9 / 15", "I = 0.6 A"],
+        "distractors": [135, 1.667, 24],
+        "hint": "What equation links voltage, current and resistance?",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "cvr-4", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Current, voltage and resistance", "difficulty": "advanced",
+      "data": {
+        "question": "A 230 V cell is connected in a series loop with a 46 \u03a9 resistor. What is the current in the circuit?",
+        "correctAnswer": 5.0, "unit": "A",
+        "workingSteps": ["Apply Ohm's law: V = I \u00d7 R, so I = V / R", "I = 230 / 46", "I = 5.0 A"],
+        "distractors": [10580, 0.2, 276],
+        "hint": "What equation links voltage, current and resistance?",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "ser-1", "type": "problem", "topicId": "series-circuits", "topicName": "Series circuits", "difficulty": "beginner",
+      "data": {
+        "question": "A 6 V battery is connected in series with a 2 \u03a9 resistor and a 4 \u03a9 resistor. What is the p.d. across the 2 \u03a9 resistor?",
+        "correctAnswer": 2.0, "unit": "V",
+        "workingSteps": ["Total resistance R_total = 2 + 4 = 6 \u03a9", "Current I = V / R_total = 6 / 6 = 1.0 A", "V\u2081 = I \u00d7 R\u2081 = 1.0 \u00d7 2 = 2.0 V"],
+        "distractors": [4.0, 3.0, 6],
+        "hint": "In a series circuit the current is the same everywhere \u2014 find it first.",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "ser-2", "type": "problem", "topicId": "series-circuits", "topicName": "Series circuits", "difficulty": "intermediate",
+      "data": {
+        "question": "A 12 V battery is connected in series with a 3 \u03a9 resistor and a 9 \u03a9 resistor. What is the p.d. across the 3 \u03a9 resistor?",
+        "correctAnswer": 3.0, "unit": "V",
+        "workingSteps": ["Total resistance R_total = 3 + 9 = 12 \u03a9", "Current I = V / R_total = 12 / 12 = 1.0 A", "V\u2081 = I \u00d7 R\u2081 = 1.0 \u00d7 3 = 3.0 V"],
+        "distractors": [9.0, 6.0, 12],
+        "hint": "In a series circuit the current is the same everywhere \u2014 find it first.",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "ser-3", "type": "problem", "topicId": "series-circuits", "topicName": "Series circuits", "difficulty": "intermediate",
+      "data": {
+        "question": "A 9 V battery is connected in series with a 5 \u03a9 resistor and a 10 \u03a9 resistor. What is the p.d. across the 5 \u03a9 resistor?",
+        "correctAnswer": 3.0, "unit": "V",
+        "workingSteps": ["Total resistance R_total = 5 + 10 = 15 \u03a9", "Current I = V / R_total = 9 / 15 = 0.6 A", "V\u2081 = I \u00d7 R\u2081 = 0.6 \u00d7 5 = 3.0 V"],
+        "distractors": [6.0, 4.5, 9],
+        "hint": "In a series circuit the current is the same everywhere \u2014 find it first.",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "par-1", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel circuits", "difficulty": "beginner",
+      "data": {
+        "question": "A 6 V cell is connected across two parallel branches: one with a 2 \u03a9 resistor, the other with a 3 \u03a9 resistor. What is the total current drawn from the cell?",
+        "correctAnswer": 5.0, "unit": "A",
+        "workingSteps": ["In parallel, the p.d. across each branch equals the supply p.d.", "I\u2081 = V / R\u2081 = 6 / 2 = 3.0 A", "I\u2082 = V / R\u2082 = 6 / 3 = 2.0 A", "I_total = I\u2081 + I\u2082 = 5.0 A"],
+        "distractors": [3.0, 2.0, 1.2],
+        "hint": "What stays the same across each branch of a parallel circuit?",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "par-2", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel circuits", "difficulty": "intermediate",
+      "data": {
+        "question": "A 12 V cell is connected across two parallel branches: one with a 4 \u03a9 resistor, the other with a 6 \u03a9 resistor. What is the total current drawn from the cell?",
+        "correctAnswer": 5.0, "unit": "A",
+        "workingSteps": ["In parallel, the p.d. across each branch equals the supply p.d.", "I\u2081 = V / R\u2081 = 12 / 4 = 3.0 A", "I\u2082 = V / R\u2082 = 12 / 6 = 2.0 A", "I_total = I\u2081 + I\u2082 = 5.0 A"],
+        "distractors": [3.0, 2.0, 1.2],
+        "hint": "What stays the same across each branch of a parallel circuit?",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "par-3", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel circuits", "difficulty": "advanced",
+      "data": {
+        "question": "A 9 V cell is connected across two parallel branches: one with a 10 \u03a9 resistor, the other with a 15 \u03a9 resistor. What is the total current drawn from the cell?",
+        "correctAnswer": 1.5, "unit": "A",
+        "workingSteps": ["In parallel, the p.d. across each branch equals the supply p.d.", "I\u2081 = V / R\u2081 = 9 / 10 = 0.9 A", "I\u2082 = V / R\u2082 = 9 / 15 = 0.6 A", "I_total = I\u2081 + I\u2082 = 1.5 A"],
+        "distractors": [0.9, 0.6, 0.36],
+        "hint": "What stays the same across each branch of a parallel circuit?",
+        "formula_id": "kb.formula.ohms_law"
+      }
+    },
+    {
+      "id": "met-1", "type": "scenario", "topicId": "meters", "topicName": "Ammeters and voltmeters", "difficulty": "beginner",
+      "data": {
+        "narrative": "You want to measure the current through the bulb AND the potential difference across it at the same time.",
+        "parameters": { "supply_voltage": 6, "bulb_resistance": 4 },
+        "challenge": "Place the ammeter and the voltmeter correctly on the circuit.",
+        "successCriteria": { "ammeter_mode": "series", "voltmeter_mode": "parallel", "voltmeter_across": "B1", "ammeter_measuring": "B1" },
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement"]
+      }
+    },
+    {
+      "id": "flt-1", "type": "scenario", "topicId": "fault-finding", "topicName": "Fault-finding", "difficulty": "intermediate",
+      "data": {
+        "narrative": "Two bulbs in series with a cell. When you close the switch neither bulb lights up.",
+        "parameters": { "supply_voltage": 3, "bulbs": 2 },
+        "challenge": "Identify the most likely fault and test it in the simulator.",
+        "successCriteria": { "fault": "break_in_loop" },
+        "relatedFacts": ["kb.fault.open_circuit", "kb.series.current"]
+      }
+    },
+    {
+      "id": "exp-1", "type": "exploration", "topicId": "exploration", "topicName": "Explore circuits", "difficulty": "beginner",
+      "data": {
+        "concept": "Series vs parallel brightness",
+        "interactiveElements": ["circuit-canvas", "brightness-meter"],
+        "guidedQuestions": [
+          "Build two identical bulbs in series. Then rebuild them in parallel. Which is brighter, and why?",
+          "What happens to the brightness of bulb A when you unscrew bulb B \u2014 in series, and in parallel?"
+        ],
+        "discoveryGoals": [
+          "Parallel branches share the supply p.d.; series branches share it.",
+          "Removing a bulb in series breaks the whole loop; in parallel, only that branch is affected."
+        ],
+        "relatedFacts": ["kb.series.voltage", "kb.parallel.voltage", "kb.fault.open_circuit"]
+      }
+    }
+  ]
+}
