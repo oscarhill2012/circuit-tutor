@@ -143,7 +143,14 @@
 
     const hasLoad = elems.some(e => e.kind === 'R'
       && (e.comp.type === 'bulb' || e.comp.type === 'resistor'));
-    const isShort = !isOpen && (!hasLoad || mainI > SHORT_CIRCUIT_I);
+    // Topological short: a load component (bulb/resistor) whose two terminals
+    // collapse to the same MNA node has been bypassed by wires. Flag as short
+    // regardless of current magnitude — catches the case where a student
+    // directly wires across a component.
+    const shortedLoad = comps.some(c =>
+      (c.type === 'bulb' || c.type === 'resistor')
+      && getNode(c.id, 'a') === getNode(c.id, 'b'));
+    const isShort = shortedLoad || (!isOpen && (!hasLoad || mainI > SHORT_CIRCUIT_I));
 
     if (isShort) {
       // Clamp all readings — a real cell would see its fuse blow / terminal voltage collapse.

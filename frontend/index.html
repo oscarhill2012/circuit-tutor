@@ -102,14 +102,52 @@
 </div>
 
 <!-- Central task-loader modal. Shown on first load and whenever a task
-     completes. Lists all tasks + a sandbox option. -->
+     completes. Grouped list + search + filters + selected-task preview. -->
 <div class="modal hidden" id="task-modal">
-  <div class="modal-card modal-card-wide">
-    <h2>Choose a task</h2>
-    <p>Pick something to work on, or explore freely in sandbox mode. Professor Volt will introduce each task when you start.</p>
-    <div class="task-list" id="task-list"></div>
-    <div class="actions">
-      <button class="ghost" id="btn-sandbox">Sandbox mode</button>
+  <div class="task-picker">
+    <header class="tp-head">
+      <div class="tp-title">
+        <h2>Choose a task</h2>
+        <p class="tp-sub">Pick something to work on, or explore freely in sandbox mode.</p>
+      </div>
+      <div class="tp-progress">
+        <div class="tp-progress-meta">
+          <span class="tp-progress-label" id="tp-progress-label">0 / 0 complete</span>
+          <span class="tp-progress-pct" id="tp-progress-pct">0%</span>
+        </div>
+        <div class="tp-progress-bar"><div class="tp-progress-fill" id="tp-progress-fill"></div></div>
+      </div>
+      <div class="tp-actions">
+        <button class="iconbtn" id="btn-sandbox">Sandbox mode</button>
+      </div>
+    </header>
+
+    <div class="tp-controls">
+      <input id="tp-search" placeholder="Search tasks…" autocomplete="off" />
+      <div class="tp-filter-row">
+        <div class="tp-filter-group" data-filter="type">
+          <button data-val="all" class="active">All types</button>
+          <button data-val="measure">Measure</button>
+          <button data-val="problem">Problem</button>
+          <button data-val="scenario">Scenario</button>
+          <button data-val="exploration">Explore</button>
+        </div>
+        <div class="tp-filter-group" data-filter="difficulty">
+          <button data-val="all" class="active">Any level</button>
+          <button data-val="beginner">Beginner</button>
+          <button data-val="intermediate">Intermediate</button>
+          <button data-val="advanced">Advanced</button>
+          <button data-val="expert">Expert</button>
+        </div>
+        <button class="tp-chip" id="tp-recommended-btn" title="Jump to the next recommended task">★ Recommended</button>
+      </div>
+    </div>
+
+    <div class="tp-body">
+      <div class="tp-groups" id="tp-groups"></div>
+      <aside class="tp-preview" id="tp-preview">
+        <div class="tp-preview-empty">Select a task to see details</div>
+      </aside>
     </div>
   </div>
 </div>

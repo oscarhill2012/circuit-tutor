@@ -31,6 +31,19 @@ export function removeThinking(id) {
   if (el) el.remove();
 }
 
+// When the model returns a separate follow_up_question, strip any trailing
+// interrogative sentence from the prose so the student doesn't see the same
+// question twice (once in grey, once in green). The system prompt also asks
+// the model not to do this, but belt-and-braces against older replies.
+function stripTrailingQuestion(text) {
+  if (!text) return text;
+  const trimmed = String(text).trimEnd();
+  if (!trimmed.endsWith('?')) return text;
+  const m = trimmed.match(/([.!?…])[^.!?…]*\?\s*$/);
+  if (m) return trimmed.slice(0, m.index + 1);
+  return '';
+}
+
 export function appendTutorMsg(payload) {
   const m = document.createElement('div');
   m.className = 'msg tutor-msg ' + (payload.reply_type || 'direct_explanation');
@@ -38,7 +51,9 @@ export function appendTutorMsg(payload) {
   who.className = 'who'; who.textContent = 'Professor Volt · ' + (payload.reply_type || 'reply');
   m.appendChild(who);
   const body = document.createElement('div');
-  body.innerHTML = renderWithKatex(payload.assistant_text || '');
+  const raw = payload.assistant_text || '';
+  const prose = payload.follow_up_question ? stripTrailingQuestion(raw) : raw;
+  body.innerHTML = renderWithKatex(prose);
   m.appendChild(body);
   if (payload.follow_up_question) {
     const f = document.createElement('div');

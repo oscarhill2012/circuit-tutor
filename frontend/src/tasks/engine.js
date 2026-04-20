@@ -55,28 +55,212 @@ function setActiveTask(taskId) {
   }
 }
 
+// --- Task picker state (local to the modal) -------------------------------
+const pickerFilters = { type: 'all', difficulty: 'all', search: '', recommendedOnly: false };
+let selectedPreviewId = null;
+let pickerWired = false;
+
+function taskTitle(t) {
+  return t.data.brief || t.data.question || t.data.challenge || t.data.concept || t.id;
+}
+
+const DIFFICULTY_ORDER = ['beginner', 'intermediate', 'advanced', 'expert'];
+function normDifficulty(d) {
+  const s = String(d || '').toLowerCase();
+  return DIFFICULTY_ORDER.includes(s) ? s : s;
+}
+
+const TYPE_LABEL = { measure: 'Measure', problem: 'Problem', scenario: 'Scenario', exploration: 'Explore' };
+
+function recommendedTaskId() {
+  // The next incomplete task in natural order — simple heuristic that matches
+  // the curriculum ordering already baked into tasks.json.
+  const next = TASKS.find(t => !state.tasksCompleted.has(t.id));
+  return next ? next.id : null;
+}
+
+function matchesFilters(t, recId) {
+  if (pickerFilters.type !== 'all' && t.type !== pickerFilters.type) return false;
+  if (pickerFilters.difficulty !== 'all' && normDifficulty(t.difficulty) !== pickerFilters.difficulty) return false;
+  if (pickerFilters.recommendedOnly && t.id !== recId) return false;
+  const q = pickerFilters.search.trim().toLowerCase();
+  if (q) {
+    const hay = [t.id, t.topicName, t.topicId, taskTitle(t)].join(' ').toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+function renderProgress() {
+  const total = TASKS.length;
+  const done = TASKS.filter(t => state.tasksCompleted.has(t.id)).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const fill = document.getElementById('tp-progress-fill');
+  const label = document.getElementById('tp-progress-label');
+  const pctEl = document.getElementById('tp-progress-pct');
+  if (fill) fill.style.width = pct + '%';
+  if (label) label.textContent = `${done} / ${total} complete`;
+  if (pctEl) pctEl.textContent = pct + '%';
+}
+
+function renderGroups() {
+  const host = document.getElementById('tp-groups');
+  host.innerHTML = '';
+  const recId = recommendedTaskId();
+
+  // Group by topicName (falls back to topicId).
+  const groups = new Map();
+  for (const t of TASKS) {
+    if (!matchesFilters(t, recId)) continue;
+    const key = t.topicName || t.topicId || 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  }
+
+  if (groups.size === 0) {
+    host.innerHTML = `<div class="tp-empty">No tasks match those filters. Clear the search or pick a different type / level.</div>`;
+    return;
+  }
+
+  for (const [topic, items] of groups) {
+    const completed = items.filter(t => state.tasksCompleted.has(t.id)).length;
+    const section = document.createElement('details');
+    section.className = 'tp-group';
+    section.open = true;
+    const itemsHtml = items.map(t => {
+      const done = state.tasksCompleted.has(t.id);
+      const rec  = t.id === recId;
+      const sel  = t.id === selectedPreviewId;
+      return `<button class="tp-item${done ? ' done' : ''}${sel ? ' selected' : ''}${rec ? ' recommended' : ''}" data-task-id="${escapeHtml(t.id)}">
+        <span class="tp-item-title">${escapeHtml(shorten(taskTitle(t), 80))}</span>
+        <span class="tp-item-meta">
+          <span class="tp-badge tp-badge-type">${escapeHtml(TYPE_LABEL[t.type] || t.type)}</span>
+          <span class="tp-badge tp-badge-diff diff-${escapeHtml(normDifficulty(t.difficulty))}">${escapeHtml(t.difficulty)}</span>
+          ${rec ? '<span class="tp-badge tp-badge-rec">★ next</span>' : ''}
+          ${done ? '<span class="tp-badge tp-badge-done">✓ done</span>' : ''}
+        </span>
+      </button>`;
+    }).join('');
+
+    section.innerHTML = `
+      <summary class="tp-group-head">
+        <span class="tp-group-caret"></span>
+        <span class="tp-group-title">${escapeHtml(topic)}</span>
+        <span class="tp-group-count">${completed} / ${items.length}</span>
+      </summary>
+      <div class="tp-group-items">${itemsHtml}</div>
+    `;
+    host.appendChild(section);
+  }
+
+  host.querySelectorAll('.tp-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedPreviewId = btn.dataset.taskId;
+      renderGroups();
+      renderPreview();
+    });
+    btn.addEventListener('dblclick', () => startTask(btn.dataset.taskId));
+  });
+}
+
+function renderPreview() {
+  const el = document.getElementById('tp-preview');
+  if (!selectedPreviewId) {
+    el.innerHTML = `<div class="tp-preview-empty">Select a task on the left to see what it involves.</div>`;
+    return;
+  }
+  const t = TASKS.find(x => x.id === selectedPreviewId);
+  if (!t) { el.innerHTML = ''; return; }
+  const done = state.tasksCompleted.has(t.id);
+  const title = taskTitle(t);
+
+  let detailsHtml = '';
+  if (t.type === 'measure') {
+    const pinned = (t.data.initial?.components || []).map(c => c.id).join(', ');
+    detailsHtml = `
+      <p>${escapeHtml(title)}</p>
+      <dl class="tp-kv">
+        ${pinned ? `<dt>Pinned</dt><dd>${escapeHtml(pinned)}</dd>` : ''}
+        <dt>Target meter</dt><dd>${escapeHtml(t.data.targetMeter || '—')} (${escapeHtml(t.data.targetUnit || '')})</dd>
+      </dl>`;
+  } else if (t.type === 'problem') {
+    detailsHtml = `<p>${escapeHtml(t.data.question || title)}</p>`;
+  } else if (t.type === 'scenario') {
+    detailsHtml = `<p>${escapeHtml(t.data.challenge || title)}</p>
+      ${t.data.narrative ? `<p class="tp-muted">${escapeHtml(t.data.narrative)}</p>` : ''}`;
+  } else if (t.type === 'exploration') {
+    detailsHtml = `<p>${escapeHtml(t.data.concept || title)}</p>
+      ${t.data.guidedQuestions?.length
+        ? `<ul class="tp-guide">${t.data.guidedQuestions.slice(0, 3).map(q => `<li>${escapeHtml(q)}</li>`).join('')}</ul>`
+        : ''}`;
+  }
+
+  el.innerHTML = `
+    <div class="tp-preview-head">
+      <span class="tp-badge tp-badge-type">${escapeHtml(TYPE_LABEL[t.type] || t.type)}</span>
+      <span class="tp-badge tp-badge-diff diff-${escapeHtml(normDifficulty(t.difficulty))}">${escapeHtml(t.difficulty)}</span>
+      ${done ? '<span class="tp-badge tp-badge-done">✓ done</span>' : ''}
+    </div>
+    <h3 class="tp-preview-topic">${escapeHtml(t.topicName || t.topicId)}</h3>
+    <div class="tp-preview-body">${detailsHtml}</div>
+    <div class="tp-preview-cta">
+      <button class="primary" id="tp-start-btn">${done ? 'Revisit task' : 'Start task'}</button>
+    </div>
+  `;
+  const btn = el.querySelector('#tp-start-btn');
+  if (btn) btn.onclick = () => startTask(t.id);
+}
+
+function shorten(s, n) {
+  s = String(s || '');
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+function wirePickerOnce() {
+  if (pickerWired) return;
+  pickerWired = true;
+
+  const search = document.getElementById('tp-search');
+  search.addEventListener('input', () => {
+    pickerFilters.search = search.value;
+    renderGroups();
+  });
+
+  document.querySelectorAll('.tp-filter-group').forEach(group => {
+    const filterKey = group.dataset.filter;
+    group.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        group.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        pickerFilters[filterKey] = btn.dataset.val;
+        renderGroups();
+      });
+    });
+  });
+
+  const recBtn = document.getElementById('tp-recommended-btn');
+  recBtn.addEventListener('click', () => {
+    pickerFilters.recommendedOnly = !pickerFilters.recommendedOnly;
+    recBtn.classList.toggle('active', pickerFilters.recommendedOnly);
+    if (pickerFilters.recommendedOnly) {
+      selectedPreviewId = recommendedTaskId();
+      renderPreview();
+    }
+    renderGroups();
+  });
+}
+
 export function openTaskModal() {
   const modal = document.getElementById('task-modal');
-  const list = document.getElementById('task-list');
-  list.innerHTML = '';
-  TASKS.forEach((t) => {
-    const done = state.tasksCompleted.has(t.id);
-    const item = document.createElement('button');
-    item.className = 'task-list-item' + (done ? ' done' : '');
-    const title =
-      t.data.brief ||
-      t.data.question ||
-      t.data.challenge ||
-      t.data.concept ||
-      t.id;
-    item.innerHTML = `
-      <span class="tl-topic">${escapeHtml(t.topicName || t.topicId)}</span>
-      <span class="tl-title">${escapeHtml(title.length > 120 ? title.slice(0, 117) + '…' : title)}</span>
-      <span class="tl-meta">${escapeHtml(t.type)} · ${escapeHtml(t.difficulty)}${done ? ' · ✓ done' : ''}</span>
-    `;
-    item.onclick = () => startTask(t.id);
-    list.appendChild(item);
-  });
+  wirePickerOnce();
+  // Default the preview to the recommended task so the user immediately sees
+  // where to start rather than an empty right pane.
+  if (!selectedPreviewId || !TASKS.find(t => t.id === selectedPreviewId)) {
+    selectedPreviewId = recommendedTaskId();
+  }
+  renderProgress();
+  renderGroups();
+  renderPreview();
   modal.classList.remove('hidden');
 }
 

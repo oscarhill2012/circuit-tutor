@@ -23,19 +23,10 @@ export async function boot() {
 
   try { await loadTasks(); } catch (err) { console.error('Task load failed:', err); }
 
-  // Starter: give students a live example.
-  // Lay the starter out as a visible rectangular loop so students see the
-  // closed path. cell bottom-left, switch top, bulb right.
-  state.components.push(
-    { id: 'C1', type: 'cell',   x: 400,  y: 700, rot: 0, props: { voltage: 6 } },
-    { id: 'S1', type: 'switch', x: 900,  y: 300, rot: 0, props: { closed: true } },
-    { id: 'L1', type: 'bulb',   x: 1200, y: 700, rot: 0, props: { resistance: 4 } },
-  );
-  state.wires.push(
-    { id: 'W' + (state.nextId++), a:{compId:'C1',term:'+'}, b:{compId:'S1',term:'a'} },
-    { id: 'W' + (state.nextId++), a:{compId:'S1',term:'b'}, b:{compId:'L1',term:'a'} },
-    { id: 'W' + (state.nextId++), a:{compId:'L1',term:'b'}, b:{compId:'C1',term:'-'} },
-  );
+  // Sandbox starts empty so the new topological short-circuit rule (a load
+  // component whose terminals collapse to one node is flagged as a short)
+  // can't be tripped by a preloaded example. Students pick a task or build
+  // freely from the palette.
   state.history = [];
   state.future = [];
   simulate();
