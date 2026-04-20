@@ -3,16 +3,29 @@
 
 import { COMP } from './schema.js';
 
-export function termPos(comp, termName) {
-  const def = COMP[comp.type].terms.find(t => t.n === termName);
-  return { x: comp.x + def.x, y: comp.y + def.y };
+export function rotatePt(x, y, rotDeg) {
+  const r = ((((rotDeg || 0) % 360) + 360) % 360) * Math.PI / 180;
+  const c = Math.cos(r), s = Math.sin(r);
+  return { x: x * c - y * s, y: x * s + y * c };
 }
 
-// Which side of the component body a terminal emerges from.
+export function termPos(comp, termName) {
+  const def = COMP[comp.type].terms.find(t => t.n === termName);
+  const p = rotatePt(def.x, def.y, comp.rot);
+  return { x: comp.x + p.x, y: comp.y + p.y };
+}
+
+// Which side of the component body a terminal emerges from, accounting
+// for the component's rotation.
 export function exitDir(comp, termName) {
   const def = COMP[comp.type].terms.find(t => t.n === termName);
-  if (Math.abs(def.x) >= Math.abs(def.y)) return def.x < 0 ? 'W' : 'E';
-  return def.y < 0 ? 'N' : 'S';
+  let base;
+  if (Math.abs(def.x) >= Math.abs(def.y)) base = def.x < 0 ? 'W' : 'E';
+  else base = def.y < 0 ? 'N' : 'S';
+  const steps = Math.round(((((comp.rot || 0) % 360) + 360) % 360) / 90) % 4;
+  const order = ['E','S','W','N'];
+  const idx = order.indexOf(base);
+  return order[(idx + steps) % 4];
 }
 
 export function advance(p, dir, d) {

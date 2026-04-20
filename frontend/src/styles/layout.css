@@ -56,7 +56,7 @@
 .part svg { width: 42px; height: 28px; }
 .part .name { font-size: 11px; color: var(--muted); }
 .tools {
-  margin-top: auto; padding: 12px; border-top: 1px solid var(--line);
+  padding: 0 12px 12px;
   display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
 }
 .tools button {
@@ -121,7 +121,9 @@
 
 #canvas { width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
 #canvas.tool-select { cursor: default; }
-#canvas.tool-delete { cursor: not-allowed; }
+#canvas.tool-delete { cursor: default; }
+#canvas.tool-rotate { cursor: default; }
+#canvas.tool-edit { cursor: default; }
 /* While a wire is pending, lock the cursor to crosshair so passing over
    existing wires on the way to the second terminal doesn't flip it to the
    hand pointer. Existing wires also ignore hover so they can't intercept

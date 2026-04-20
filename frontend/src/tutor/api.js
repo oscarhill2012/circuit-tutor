@@ -88,14 +88,46 @@ function buildUserPayload(studentMessage) {
   });
 }
 
+// Repeated-message batching: if the student fires off several messages in
+// quick succession (or while a previous request is still in flight), wait
+// for a short debounce and then send them to the tutor as a single
+// combined student_message. Recent history already carries each individual
+// turn as context, so the tutor sees them one-by-one as well.
+const DEBOUNCE_MS = 450;
+let pendingRequest = null;  // Promise while a fetch is in flight
+let queued = [];            // Student messages waiting to be sent
+let debounceTimer = null;
+
 export async function askTutor(message) {
   pushUserMsg(message);
+  queued.push(message);
+  if (pendingRequest) return;           // drained after current completes
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(flushTutorQueue, DEBOUNCE_MS);
+}
+
+async function flushTutorQueue() {
+  debounceTimer = null;
+  if (pendingRequest || queued.length === 0) return;
+  const batch = queued.length === 1
+    ? queued[0]
+    : queued.join('\n\n');
+  queued = [];
+  pendingRequest = sendOneTutorRequest(batch);
+  try { await pendingRequest; }
+  finally {
+    pendingRequest = null;
+    if (queued.length > 0) flushTutorQueue();
+  }
+}
+
+async function sendOneTutorRequest(combinedMessage) {
   const thinkingId = appendThinking();
   try {
     const res = await fetch(TUTOR_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: buildUserPayload(message),
+      body: buildUserPayload(combinedMessage),
     });
     if (!res.ok) {
       removeThinking(thinkingId);
@@ -105,7 +137,6 @@ export async function askTutor(message) {
     const data = await res.json();
     const parsed = data.reply || { reply_type:'direct_explanation', assistant_text: 'No reply.' };
     state.lastAnalysis = data.analysis || null;
-    // Tutor-authored rolling summary — see tutor.py OUTPUT CONTRACT.
     if (typeof parsed.rolling_summary === 'string' && parsed.rolling_summary.trim()) {
       state.rollingSummary = parsed.rolling_summary.trim();
     }

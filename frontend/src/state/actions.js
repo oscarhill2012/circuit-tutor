@@ -3,7 +3,7 @@
 
 import { state, GRID } from './store.js';
 import { COMP, COMP_PREFIX } from '../circuit/schema.js';
-import { render } from '../circuit/renderer.js';
+import { render, rerouteWiresFor } from '../circuit/renderer.js';
 
 export function uid(type) {
   const p = COMP_PREFIX[type] || 'X';
@@ -87,6 +87,34 @@ export function clearCircuit() {
 export function deleteWire(wid) {
   pushHistory();
   state.wires = state.wires.filter(w => w.id !== wid);
+  simulate(); render();
+}
+
+export function rotateComponent(cid, deltaDeg = 90) {
+  const c = state.components.find(x => x.id === cid);
+  if (!c) return;
+  if (state.lockedIds && state.lockedIds.has(cid)) return;
+  pushHistory();
+  c.rot = (((c.rot || 0) + deltaDeg) % 360 + 360) % 360;
+  rerouteWiresFor([cid]);
+  simulate(); render();
+}
+
+export function editComponentValue(cid) {
+  const c = state.components.find(x => x.id === cid);
+  if (!c) return;
+  if (state.lockedIds && state.lockedIds.has(cid)) return;
+  let field = null, unit = '', label = '';
+  if (c.type === 'cell' || c.type === 'battery') { field = 'voltage'; unit = 'V'; label = 'Voltage'; }
+  else if (c.type === 'resistor' || c.type === 'bulb') { field = 'resistance'; unit = 'Ω'; label = 'Resistance'; }
+  else return;
+  const current = c.props[field];
+  const raw = window.prompt(`${label} for ${c.id} (${unit}):`, Number(current).toFixed(2));
+  if (raw == null) return;
+  const n = parseFloat(String(raw).replace(',', '.'));
+  if (!isFinite(n) || n <= 0) { alert(`Enter a positive number (${unit}).`); return; }
+  pushHistory();
+  c.props[field] = Math.round(n * 100) / 100;
   simulate(); render();
 }
 

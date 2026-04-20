@@ -15,10 +15,14 @@ export function collectComponentBoxes(excludeIds = []) {
   for (const c of state.components) {
     if (ex.has(c.id)) continue;
     const m = COMP[c.type];
+    const rot = ((((c.rot || 0) % 360) + 360) % 360);
+    const vert = (rot === 90 || rot === 270);
+    const w = vert ? m.h : m.w;
+    const h = vert ? m.w : m.h;
     out.push({
       id: c.id,
-      x1: c.x - m.w / 2 - CLEARANCE, y1: c.y - m.h / 2 - CLEARANCE,
-      x2: c.x + m.w / 2 + CLEARANCE, y2: c.y + m.h / 2 + CLEARANCE,
+      x1: c.x - w / 2 - CLEARANCE, y1: c.y - h / 2 - CLEARANCE,
+      x2: c.x + w / 2 + CLEARANCE, y2: c.y + h / 2 + CLEARANCE,
     });
   }
   return out;

@@ -12,7 +12,7 @@ import { state } from '../state/store.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
 import { render, svg, rerouteWiresFor, keyOfTerm } from './renderer.js';
 import { termPos } from './geometry.js';
-import { route as routePath } from './wiring/router.js';
+import { route as routePath, segCross } from './wiring/router.js';
 import { previewPath } from './wiring/path.js';
 import { updateReadout } from '../ui/canvas.js';
 import { createValidator } from './wiring/validation.js';
@@ -86,6 +86,44 @@ export function svgPoint(ev) {
   const ctm = svg.getScreenCTM().inverse();
   const p = pt.matrixTransform(ctm);
   return { x: p.x, y: p.y };
+}
+
+function countPathCrossings(p1, p2) {
+  if (!p1 || !p2 || p1.length < 2 || p2.length < 2) return 0;
+  let n = 0;
+  for (let i = 1; i < p1.length; i++) {
+    for (let j = 1; j < p2.length; j++) {
+      if (segCross(p1[i-1], p1[i], p2[j-1], p2[j])) n++;
+    }
+  }
+  return n;
+}
+
+// After a component moves, if two wires that both attach to it now cross
+// each other, swap which terminal each wire uses (on the moved component
+// only) and reroute — provided the swap actually removes a crossing.
+export function maybeSwapCrossedTerminals(compId) {
+  const attached = state.wires.filter(w => w.a.compId === compId || w.b.compId === compId);
+  if (attached.length !== 2) return false;
+  const [w1, w2] = attached;
+  const end1 = w1.a.compId === compId ? 'a' : 'b';
+  const end2 = w2.a.compId === compId ? 'a' : 'b';
+  if (w1[end1].term === w2[end2].term) return false;
+  const before = countPathCrossings(w1.path, w2.path);
+  if (before === 0) return false;
+  const t1 = w1[end1].term, t2 = w2[end2].term;
+  w1[end1].term = t2;
+  w2[end2].term = t1;
+  const np1 = routePath(w1.a, w1.b, { excludeComps: [w1.a.compId, w1.b.compId], excludeWires: [w1.id, w2.id] });
+  const np2 = routePath(w2.a, w2.b, { excludeComps: [w2.a.compId, w2.b.compId], excludeWires: [w1.id, w2.id] });
+  if (!np1 || !np2) { w1[end1].term = t1; w2[end2].term = t2; return false; }
+  const after = countPathCrossings(np1, np2);
+  if (after < before) {
+    w1.path = np1; w2.path = np2;
+    return true;
+  }
+  w1[end1].term = t1; w2[end2].term = t2;
+  return false;
 }
 
 export function onCompMouseDown(ev, c) {
@@ -180,6 +218,7 @@ export function initCanvasInteractions() {
       if (editor.dragging.moved) {
         pushHistory();
         rerouteWiresFor([editor.dragging.compId]);
+        maybeSwapCrossedTerminals(editor.dragging.compId);
         simulate();
         render();
       }

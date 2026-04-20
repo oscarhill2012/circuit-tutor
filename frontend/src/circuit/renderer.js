@@ -5,9 +5,9 @@
 import { state, SVG_W, SVG_H, EPS } from '../state/store.js';
 import { COMP } from './schema.js';
 import { editor, onCompMouseDown, onTerminalPointerDown } from './editor.js';
-import { deleteWire, deleteComponent } from '../state/actions.js';
+import { deleteWire, deleteComponent, rotateComponent, editComponentValue } from '../state/actions.js';
 import { updateHUD, updateReadout } from '../ui/canvas.js';
-import { termPos } from './geometry.js';
+import { termPos, rotatePt } from './geometry.js';
 import { route as routePath } from './wiring/router.js';
 import { toSvgPath, previewPath } from './wiring/path.js';
 
@@ -200,90 +200,113 @@ export function render() {
 
 export function renderComponent(c) {
   const isLocked = state.lockedIds && state.lockedIds.has(c.id);
+  const rot = ((((c.rot || 0) % 360) + 360) % 360);
+  const vert = (rot === 90 || rot === 270);
   const g = svgEl('g', {
     class: 'comp' + (state.selectedId === c.id ? ' selected' : '') + (isLocked ? ' locked' : ''),
     transform: `translate(${c.x}, ${c.y})`,
     'data-cid': c.id,
     onpointerdown: (ev) => onCompMouseDown(ev, c),
-    onclick: (ev) => { ev.stopPropagation(); if (state.tool === 'delete') deleteComponent(c.id); else { state.selectedId = c.id; render(); updateReadout(); } },
+    onclick: (ev) => {
+      ev.stopPropagation();
+      if (state.tool === 'delete') { deleteComponent(c.id); return; }
+      if (state.tool === 'rotate') { rotateComponent(c.id); return; }
+      if (state.tool === 'edit') { editComponentValue(c.id); return; }
+      state.selectedId = c.id; render(); updateReadout();
+    },
   });
 
-  // selection frame
-  const box = COMP[c.type];
+  // Inner group that actually rotates with the component. Body shapes go
+  // here; text labels are placed on the outer group so they read upright.
+  const bodyG = svgEl('g', { class: 'body-wrap', transform: `rotate(${rot})` });
+  g.appendChild(bodyG);
+
+  // selection frame — sized to rotated bounding box so the selection halo
+  // still hugs the component when rotated 90°/270°.
+  const boxRaw = COMP[c.type];
+  const bw = vert ? boxRaw.h : boxRaw.w;
+  const bh = vert ? boxRaw.w : boxRaw.h;
   g.appendChild(svgEl('rect', {
-    class:'frame', x: -box.w/2-14, y: -box.h/2-32, width: box.w+28, height: box.h+64,
+    class:'frame', x: -bw/2-14, y: -bh/2-32, width: bw+28, height: bh+64,
     rx: 10, ry: 10, fill: 'transparent', stroke: 'transparent'
   }));
 
   const simEl = state.sim && state.sim.ok ? state.sim.elements.find(e => e.comp && e.comp.id === c.id) : null;
+
+  // Place an upright text label at the *rotated* anchor (tx,ty) — the
+  // point stays near its terminal, but the glyphs read horizontally.
+  const textAt = (tx, ty, extraAttrs, str) => {
+    const p = rot ? rotatePt(tx, ty, rot) : { x: tx, y: ty };
+    return svgEl('text', { x: p.x, y: p.y, ...extraAttrs }, str);
+  };
 
   if (c.type === 'cell' || c.type === 'battery') {
     const w = c.type === 'battery' ? 80 : 60;
     const n = c.type === 'battery' ? 2 : 1;
     const spacing = 16;
     const startX = -spacing*(n-1)/2 - 6;
-    g.appendChild(svgEl('line', { class:'body', x1:-w/2, y1:0, x2:startX-8, y2:0 }));
-    g.appendChild(svgEl('line', { class:'body', x1:startX + spacing*(n-1)+20, y1:0, x2:w/2, y2:0 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:-w/2, y1:0, x2:startX-8, y2:0 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:startX + spacing*(n-1)+20, y1:0, x2:w/2, y2:0 }));
     for (let i = 0; i < n; i++) {
       const sx = startX + spacing*i;
-      g.appendChild(svgEl('line', { class:'body', x1:sx, y1:-14, x2:sx, y2:14 }));
-      g.appendChild(svgEl('line', { class:'body', x1:sx+10, y1:-8, x2:sx+10, y2:8 }));
+      bodyG.appendChild(svgEl('line', { class:'body', x1:sx, y1:-14, x2:sx, y2:14 }));
+      bodyG.appendChild(svgEl('line', { class:'body', x1:sx+10, y1:-8, x2:sx+10, y2:8 }));
     }
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:-w/2+4, y:-16, class:'label' }, '+'));
-      g.appendChild(svgEl('text', { x:w/2-10, y:-16, class:'label' }, '−'));
-      g.appendChild(svgEl('text', { x:0, y:28, 'text-anchor':'middle', class:'val v' }, `${c.props.voltage} V`));
-      g.appendChild(svgEl('text', { x:0, y:-24, 'text-anchor':'middle', class:'label' }, c.id));
+      g.appendChild(textAt(-w/2+4, -16, { class:'label' }, '+'));
+      g.appendChild(textAt(w/2-10, -16, { class:'label' }, '−'));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 18, 'text-anchor':'middle', class:'val v' }, `${c.props.voltage} V`));
+      g.appendChild(svgEl('text', { x:0, y: -bh/2 - 6, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'switch') {
-    g.appendChild(svgEl('line', { class:'body', x1:-30, y1:0, x2:-12, y2:0 }));
-    g.appendChild(svgEl('line', { class:'body', x1:12, y1:0, x2:30, y2:0 }));
-    g.appendChild(svgEl('circle', { class:'fill', cx:-12, cy:0, r:3 }));
-    g.appendChild(svgEl('circle', { class:'fill', cx:12, cy:0, r:3 }));
-    if (c.props.closed) g.appendChild(svgEl('line', { class:'body', x1:-12, y1:0, x2:12, y2:0 }));
-    else g.appendChild(svgEl('line', { class:'body', x1:-12, y1:0, x2:10, y2:-14 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:-30, y1:0, x2:-12, y2:0 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:12, y1:0, x2:30, y2:0 }));
+    bodyG.appendChild(svgEl('circle', { class:'fill', cx:-12, cy:0, r:3 }));
+    bodyG.appendChild(svgEl('circle', { class:'fill', cx:12, cy:0, r:3 }));
+    if (c.props.closed) bodyG.appendChild(svgEl('line', { class:'body', x1:-12, y1:0, x2:12, y2:0 }));
+    else bodyG.appendChild(svgEl('line', { class:'body', x1:-12, y1:0, x2:10, y2:-14 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y:28, 'text-anchor':'middle', class:'val' }, c.props.closed ? 'closed' : 'open'));
-      g.appendChild(svgEl('text', { x:0, y:-14, 'text-anchor':'middle', class:'label' }, c.id));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 18, 'text-anchor':'middle', class:'val' }, c.props.closed ? 'closed' : 'open'));
+      g.appendChild(svgEl('text', { x:0, y: -bh/2 - 4, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'resistor') {
-    g.appendChild(svgEl('line', { class:'body', x1:-40, y1:0, x2:-20, y2:0 }));
-    g.appendChild(svgEl('rect', { class:'fill', x:-20, y:-10, width:40, height:20, rx:2 }));
-    g.appendChild(svgEl('line', { class:'body', x1:20, y1:0, x2:40, y2:0 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:-40, y1:0, x2:-20, y2:0 }));
+    bodyG.appendChild(svgEl('rect', { class:'fill', x:-20, y:-10, width:40, height:20, rx:2 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:20, y1:0, x2:40, y2:0 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y:26, 'text-anchor':'middle', class:'val r' }, `${c.props.resistance} Ω`));
-      g.appendChild(svgEl('text', { x:0, y:-14, 'text-anchor':'middle', class:'label' }, c.id));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 16, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
+      g.appendChild(svgEl('text', { x:0, y: -bh/2 - 4, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'bulb') {
     const brightness = simEl && state.sim && state.sim.ok ? Math.min(1, Math.abs(simEl.current) * Math.abs(simEl.current) * simEl.value / 10) : 0;
-    g.appendChild(svgEl('line', { class:'body', x1:-30, y1:0, x2:-14, y2:0 }));
-    g.appendChild(svgEl('line', { class:'body', x1:14, y1:0, x2:30, y2:0 }));
-    g.appendChild(svgEl('circle', { class:'fill', cx:0, cy:0, r:14 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:-30, y1:0, x2:-14, y2:0 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:14, y1:0, x2:30, y2:0 }));
+    bodyG.appendChild(svgEl('circle', { class:'fill', cx:0, cy:0, r:14 }));
     if (brightness > 0.02) {
-      g.appendChild(svgEl('circle', { cx:0, cy:0, r: 14 + brightness*8, fill:`rgba(255,207,92,${0.3 + 0.5*brightness})`, 'stroke':'none' }));
-      g.appendChild(svgEl('circle', { cx:0, cy:0, r: 10, fill:`rgba(255,235,150,${brightness})`, 'stroke':'none' }));
+      bodyG.appendChild(svgEl('circle', { cx:0, cy:0, r: 14 + brightness*8, fill:`rgba(255,207,92,${0.3 + 0.5*brightness})`, 'stroke':'none' }));
+      bodyG.appendChild(svgEl('circle', { cx:0, cy:0, r: 10, fill:`rgba(255,235,150,${brightness})`, 'stroke':'none' }));
     }
-    g.appendChild(svgEl('line', { class:'body', x1:-9, y1:-9, x2:9, y2:9 }));
-    g.appendChild(svgEl('line', { class:'body', x1:-9, y1:9, x2:9, y2:-9 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:-9, y1:-9, x2:9, y2:9 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:-9, y1:9, x2:9, y2:-9 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y:30, 'text-anchor':'middle', class:'val r' }, `${c.props.resistance} Ω`));
-      g.appendChild(svgEl('text', { x:0, y:-22, 'text-anchor':'middle', class:'label' }, c.id));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 20, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
+      g.appendChild(svgEl('text', { x:0, y: -bh/2 - 8, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'ammeter' || c.type === 'voltmeter') {
     const isA = c.type === 'ammeter';
-    g.appendChild(svgEl('line', { class:'body', x1:-30, y1:0, x2:-14, y2:0 }));
-    g.appendChild(svgEl('line', { class:'body', x1:14, y1:0, x2:30, y2:0 }));
-    g.appendChild(svgEl('circle', { class:'fill', cx:0, cy:0, r:14 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:-30, y1:0, x2:-14, y2:0 }));
+    bodyG.appendChild(svgEl('line', { class:'body', x1:14, y1:0, x2:30, y2:0 }));
+    bodyG.appendChild(svgEl('circle', { class:'fill', cx:0, cy:0, r:14 }));
     g.appendChild(svgEl('text', { x:0, y:4, 'text-anchor':'middle', class:'label', 'font-size': 13 }, isA ? 'A' : 'V'));
 
-    // Digital LCD-style readout sitting just above the meter
+    // Digital LCD-style readout sitting just above the meter (upright).
     let digits = '- - . - -';
     const unit = isA ? 'A' : 'V';
     if (simEl && state.sim && state.sim.ok && !state.sim.empty && !state.sim.isShort) {
       const raw = isA ? Math.abs(simEl.current) : Math.abs(simEl.drop);
       digits = raw < 10 ? raw.toFixed(2) : raw.toFixed(1);
     }
-    const lcdW = 54, lcdH = 18, lcdY = -38;
+    const lcdW = 54, lcdH = 18, lcdY = -(bh/2 + lcdH + 4);
     g.appendChild(svgEl('rect', {
       class: 'meter-lcd-bg' + (isA ? '' : ' v'),
       x: -lcdW/2, y: lcdY, width: lcdW, height: lcdH, rx: 3,
@@ -300,43 +323,55 @@ export function renderComponent(c) {
     }, unit));
 
     if (state.toggles.labels) {
-      // Id label sits below the circle; the digital reading owns the space above.
-      g.appendChild(svgEl('text', { x:0, y:30, 'text-anchor':'middle', class:'label' }, c.id));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 18, 'text-anchor':'middle', class:'label' }, c.id));
     }
     if (checkMeterPlacement(c) === 'warn') {
       g.classList.add('error');
     }
   }
 
-  // Voltage drop + current bars for resistors/bulbs — now larger with numeric
-  // labels so students can read them without hovering.
+  // Voltage drop + current bars for resistors/bulbs. Horizontal by default;
+  // when the component is rotated vertical, bars sit on the right side as
+  // vertical fills, while text labels remain upright.
   const showBars = simEl && (c.type === 'bulb' || c.type === 'resistor')
     && state.sim && state.sim.ok && !state.sim.isShort;
   if (showBars) {
-    const bw = 60, bh = 7;
-    const yBase = COMP[c.type].h / 2 + 16;
-    if (state.toggles.voltage && state.sim.supplyV > 0) {
-      const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
-      g.appendChild(svgEl('rect', { class:'vbar-bg', x:-bw/2, y: yBase, width: bw, height: bh, rx:2 }));
-      g.appendChild(svgEl('rect', { class:'vbar-fg', x:-bw/2, y: yBase, width: bw*vfrac, height: bh, rx:2 }));
-      g.appendChild(svgEl('text', {
-        x: -bw/2 - 4, y: yBase + bh - 1, 'text-anchor':'end', class:'bar-label v',
-      }, 'V'));
-      g.appendChild(svgEl('text', {
-        x: bw/2 + 4, y: yBase + bh - 1, class:'bar-label v',
-      }, `${Math.abs(simEl.drop).toFixed(2)}V`));
-    }
-    if (state.toggles.current && state.sim.totalI > 0) {
-      const ifrac = Math.min(1, Math.abs(simEl.current) / Math.max(state.sim.totalI, EPS));
-      const y2 = yBase + bh + 4;
-      g.appendChild(svgEl('rect', { class:'vbar-bg', x:-bw/2, y: y2, width: bw, height: bh, rx:2 }));
-      g.appendChild(svgEl('rect', { class:'ibar-fg', x:-bw/2, y: y2, width: bw*ifrac, height: bh, rx:2 }));
-      g.appendChild(svgEl('text', {
-        x: -bw/2 - 4, y: y2 + bh - 1, 'text-anchor':'end', class:'bar-label i',
-      }, 'I'));
-      g.appendChild(svgEl('text', {
-        x: bw/2 + 4, y: y2 + bh - 1, class:'bar-label i',
-      }, `${Math.abs(simEl.current).toFixed(2)}A`));
+    const barLen = 60, barT = 7;
+    if (!vert) {
+      const yBase = bh / 2 + 16;
+      if (state.toggles.voltage && state.sim.supplyV > 0) {
+        const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
+        g.appendChild(svgEl('rect', { class:'vbar-bg', x:-barLen/2, y: yBase, width: barLen, height: barT, rx:2 }));
+        g.appendChild(svgEl('rect', { class:'vbar-fg', x:-barLen/2, y: yBase, width: barLen*vfrac, height: barT, rx:2 }));
+        g.appendChild(svgEl('text', { x: -barLen/2 - 4, y: yBase + barT - 1, 'text-anchor':'end', class:'bar-label v' }, 'V'));
+        g.appendChild(svgEl('text', { x: barLen/2 + 4, y: yBase + barT - 1, class:'bar-label v' }, `${Math.abs(simEl.drop).toFixed(2)}V`));
+      }
+      if (state.toggles.current && state.sim.totalI > 0) {
+        const ifrac = Math.min(1, Math.abs(simEl.current) / Math.max(state.sim.totalI, EPS));
+        const y2 = yBase + barT + 4;
+        g.appendChild(svgEl('rect', { class:'vbar-bg', x:-barLen/2, y: y2, width: barLen, height: barT, rx:2 }));
+        g.appendChild(svgEl('rect', { class:'ibar-fg', x:-barLen/2, y: y2, width: barLen*ifrac, height: barT, rx:2 }));
+        g.appendChild(svgEl('text', { x: -barLen/2 - 4, y: y2 + barT - 1, 'text-anchor':'end', class:'bar-label i' }, 'I'));
+        g.appendChild(svgEl('text', { x: barLen/2 + 4, y: y2 + barT - 1, class:'bar-label i' }, `${Math.abs(simEl.current).toFixed(2)}A`));
+      }
+    } else {
+      // Vertical bars on the right. Fill grows upward from the bottom.
+      const xBase = bw / 2 + 12;
+      if (state.toggles.voltage && state.sim.supplyV > 0) {
+        const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
+        g.appendChild(svgEl('rect', { class:'vbar-bg', x: xBase, y: -barLen/2, width: barT, height: barLen, rx:2 }));
+        g.appendChild(svgEl('rect', { class:'vbar-fg', x: xBase, y: barLen/2 - barLen*vfrac, width: barT, height: barLen*vfrac, rx:2 }));
+        g.appendChild(svgEl('text', { x: xBase + barT/2, y: -barLen/2 - 4, 'text-anchor':'middle', class:'bar-label v' }, 'V'));
+        g.appendChild(svgEl('text', { x: xBase + barT/2, y: barLen/2 + 12, 'text-anchor':'middle', class:'bar-label v' }, `${Math.abs(simEl.drop).toFixed(2)}V`));
+      }
+      if (state.toggles.current && state.sim.totalI > 0) {
+        const ifrac = Math.min(1, Math.abs(simEl.current) / Math.max(state.sim.totalI, EPS));
+        const x2 = xBase + barT + 10;
+        g.appendChild(svgEl('rect', { class:'vbar-bg', x: x2, y: -barLen/2, width: barT, height: barLen, rx:2 }));
+        g.appendChild(svgEl('rect', { class:'ibar-fg', x: x2, y: barLen/2 - barLen*ifrac, width: barT, height: barLen*ifrac, rx:2 }));
+        g.appendChild(svgEl('text', { x: x2 + barT/2, y: -barLen/2 - 4, 'text-anchor':'middle', class:'bar-label i' }, 'I'));
+        g.appendChild(svgEl('text', { x: x2 + barT/2, y: barLen/2 + 12, 'text-anchor':'middle', class:'bar-label i' }, `${Math.abs(simEl.current).toFixed(2)}A`));
+      }
     }
   }
 

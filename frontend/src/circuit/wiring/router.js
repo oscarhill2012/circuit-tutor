@@ -14,7 +14,7 @@ import { collectComponentBoxes, collectWireSegments } from './obstacles.js';
 // Tunables --------------------------------------------------------------
 const STUB = 18;          // length of mandatory source/target stub
 const BEND_COST = 22;     // penalty per 90° turn
-const CROSSING_COST = 60; // penalty per existing wire crossed
+const CROSSING_COST = 220; // penalty per existing wire crossed — strongly discouraged
 const OVERLAP_COST = 240; // penalty per axis-aligned overlap with existing wire
 const NEAR_COST = 3;      // penalty per segment that hugs an obstacle edge
 const REUSE_BONUS = 8;    // reward per segment reused from previous path
