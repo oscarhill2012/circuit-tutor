@@ -271,7 +271,8 @@ def _extract_state_for_analysis(circuit_state):
         components.append(entry)
 
     wires = [{"id": w.get("id"), "from": w.get("from"), "to": w.get("to")} for w in wires_in]
-    meters = [{"id": m.get("id"), "mode": m.get("mode"), "measuring": m.get("measuring"), "across": m.get("across")} for m in meters_in]
+    # Validator only reads id (type is looked up from components_by_id).
+    meters = [{"id": m.get("id")} for m in meters_in]
     return {"components": components, "wires": wires, "meters": meters}
 
 

@@ -18,7 +18,6 @@ export const state = {
   nextId: 1,
   toggles: { current: true, voltage: true, labels: true },
   sim: null,             // last sim result
-  currentTaskIndex: 0,
   tasksCompleted: new Set(),
   messages: [],
   lockedIds: new Set(),     // component ids that the current task has pinned

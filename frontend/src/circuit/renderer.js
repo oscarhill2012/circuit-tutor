@@ -11,20 +11,8 @@ import { termPos } from './geometry.js';
 import { route as routePath } from './wiring/router.js';
 import { toSvgPath, previewPath } from './wiring/path.js';
 
-export { termPos };
-
 export const svg = document.getElementById('canvas');
 const SVGNS = 'http://www.w3.org/2000/svg';
-
-export function svgPointFromEvent(ev) {
-  if (!svg.createSVGPoint) return null;
-  const pt = svg.createSVGPoint();
-  pt.x = ev.clientX; pt.y = ev.clientY;
-  const ctm = svg.getScreenCTM();
-  if (!ctm) return null;
-  const p = pt.matrixTransform(ctm.inverse());
-  return { x: p.x, y: p.y };
-}
 
 export function svgEl(tag, attrs, ...children) {
   const e = document.createElementNS(SVGNS, tag);
@@ -38,18 +26,6 @@ export function svgEl(tag, attrs, ...children) {
 }
 
 export function keyOfTerm(cid, tn) { return cid + '.' + tn; }
-
-// Routing is delegated to RouterService; rendering is delegated to
-// wiring/path. These helpers just expose the shape legacy callers expect.
-
-// Backwards-compat: build an SVG `d` for a pending-wire preview.
-export function manhattanPath(a, b) { return previewPath(a, b); }
-
-// Thin shim used by editor.js when a wire is committed. Returns the full
-// routed path (including endpoints) so the wire can cache it on the model.
-export function routeWire(source, target, opts = {}) {
-  return routePath(source, target, opts);
-}
 
 // Pull the committed path for a wire, routing and caching on demand.
 export function resolveWirePath(w) {
@@ -211,7 +187,7 @@ export function render() {
       const p1 = termPos(ca, state.pendingWire.from.term);
       const p2 = { x: state.pendingWire.mouseX, y: state.pendingWire.mouseY };
       editor.previewEl = svgEl('path', {
-        class: 'wire preview', d: manhattanPath(p1, p2),
+        class: 'wire preview', d: previewPath(p1, p2),
         'pointer-events': 'none',
       });
       svg.appendChild(editor.previewEl);
@@ -302,7 +278,7 @@ export function renderComponent(c) {
 
     // Digital LCD-style readout sitting just above the meter
     let digits = '- - . - -';
-    let unit = isA ? 'A' : 'V';
+    const unit = isA ? 'A' : 'V';
     if (simEl && state.sim && state.sim.ok && !state.sim.empty && !state.sim.isShort) {
       const raw = isA ? Math.abs(simEl.current) : Math.abs(simEl.drop);
       digits = raw < 10 ? raw.toFixed(2) : raw.toFixed(1);

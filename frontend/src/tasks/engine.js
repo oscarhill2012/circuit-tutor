@@ -49,10 +49,6 @@ function shuffleSeed(arr, seed) {
 
 function setActiveTask(taskId) {
   activeTaskId = taskId;
-  if (taskId) {
-    const idx = TASKS.findIndex(t => t.id === taskId);
-    if (idx >= 0) state.currentTaskIndex = idx;
-  }
 }
 
 // --- Task picker state (local to the modal) -------------------------------
@@ -64,10 +60,8 @@ function taskTitle(t) {
   return t.data.brief || t.data.question || t.data.challenge || t.data.concept || t.id;
 }
 
-const DIFFICULTY_ORDER = ['beginner', 'intermediate', 'advanced', 'expert'];
 function normDifficulty(d) {
-  const s = String(d || '').toLowerCase();
-  return DIFFICULTY_ORDER.includes(s) ? s : s;
+  return String(d || '').toLowerCase();
 }
 
 const TYPE_LABEL = { measure: 'Measure', problem: 'Problem', scenario: 'Scenario', exploration: 'Explore' };

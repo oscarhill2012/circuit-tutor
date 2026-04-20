@@ -10,8 +10,10 @@
 
 import { state } from '../state/store.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
-import { render, svg, routeWire, rerouteWiresFor, keyOfTerm, manhattanPath } from './renderer.js';
+import { render, svg, rerouteWiresFor, keyOfTerm } from './renderer.js';
 import { termPos } from './geometry.js';
+import { route as routePath } from './wiring/router.js';
+import { previewPath } from './wiring/path.js';
 import { updateReadout } from '../ui/canvas.js';
 import { createValidator } from './wiring/validation.js';
 import { createWireInteractionController } from './wiring/controller.js';
@@ -28,7 +30,7 @@ const validator = createValidator(() => state);
 const controller = createWireInteractionController({
   validator,
   onCommit(from, to) {
-    const path = routeWire(from, to, { excludeComps: [from.compId, to.compId] });
+    const path = routePath(from, to, { excludeComps: [from.compId, to.compId] });
     pushHistory();
     const wire = {
       id: 'W' + (state.nextId++),
@@ -55,7 +57,7 @@ const controller = createWireInteractionController({
       if (ca) {
         const p1 = termPos(ca, pending.from.term);
         const p2 = { x: pending.mouseX, y: pending.mouseY };
-        editor.previewEl.setAttribute('d', manhattanPath(p1, p2));
+        editor.previewEl.setAttribute('d', previewPath(p1, p2));
       }
       return;
     }

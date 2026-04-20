@@ -1,7 +1,7 @@
 // Canvas HUD chips, readout panel, tool/toggle buttons, keyboard shortcuts.
 
 import { state } from '../state/store.js';
-import { pushHistory, simulate, undo, redo, deleteComponent, deleteWire } from '../state/actions.js';
+import { pushHistory, simulate, undo, redo, deleteComponent, deleteWire, clearCircuit } from '../state/actions.js';
 import { render, svg } from '../circuit/renderer.js';
 
 export function topologyGuess() { return window.Physics.topologyGuess(state.sim); }
@@ -94,9 +94,7 @@ export function initTools() {
   document.getElementById('btn-clear').onclick = () => {
     if (!state.components.length && !state.wires.length) return;
     if (!confirm('Clear the whole circuit?')) return;
-    pushHistory();
-    state.components = []; state.wires = []; state.selectedId = null;
-    simulate(); render();
+    clearCircuit();
   };
   document.querySelectorAll('.toggle').forEach(t => {
     t.addEventListener('click', () => {

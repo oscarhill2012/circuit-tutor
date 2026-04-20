@@ -67,7 +67,9 @@ function stripTrailingQuestion(text) {
   if (!trimmed.endsWith('?')) return text;
   const m = trimmed.match(/([.!?…])[^.!?…]*\?\s*$/);
   if (m) return trimmed.slice(0, m.index + 1);
-  return '';
+  // Whole text is a single trailing question — keep it; the follow-up
+  // block will show it again, but dropping the prose leaves an empty bubble.
+  return text;
 }
 
 export function appendTutorMsg(payload) {
