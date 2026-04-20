@@ -5,12 +5,38 @@ import { state } from '../state/store.js';
 import { escapeHtml, getActiveTask } from '../tasks/engine.js';
 import { askTutor } from '../tutor/api.js';
 
+// Hard cap on in-memory chat length. Prevents unbounded growth of
+// state.messages and the #messages DOM, which would otherwise slowly
+// lag the panel and bloat memory on long sessions. The tutor API
+// already truncates what gets sent per-turn (HISTORY_TURNS in api.js),
+// so trimming older turns here has no effect on prompt size — it just
+// stops the app from hoarding them forever.
+const MAX_CHAT_MESSAGES = 60;
+
+function trimChatIfTooLong() {
+  if (state.messages.length > MAX_CHAT_MESSAGES) {
+    state.messages.splice(0, state.messages.length - MAX_CHAT_MESSAGES);
+  }
+  const host = document.getElementById('messages');
+  if (!host) return;
+  while (host.children.length > MAX_CHAT_MESSAGES) host.removeChild(host.firstChild);
+}
+
+export function clearChat() {
+  state.messages = [];
+  state.rollingSummary = '';
+  state.lastAnalysis = null;
+  const host = document.getElementById('messages');
+  if (host) host.innerHTML = '';
+}
+
 export function pushUserMsg(text) {
   state.messages.push({ role: 'user', content: text });
   const m = document.createElement('div');
   m.className = 'msg user-msg';
   m.textContent = text;
   document.getElementById('messages').appendChild(m);
+  trimChatIfTooLong();
   scrollMsgs();
 }
 
@@ -62,6 +88,7 @@ export function appendTutorMsg(payload) {
     m.appendChild(f);
   }
   document.getElementById('messages').appendChild(m);
+  trimChatIfTooLong();
   scrollMsgs();
 }
 
@@ -101,8 +128,7 @@ export function initTutorPanel() {
     };
   });
   document.getElementById('btn-clear-chat').onclick = () => {
-    state.messages = [];
-    document.getElementById('messages').innerHTML = '';
+    clearChat();
   };
   document.getElementById('btn-help').onclick = () => {
     appendTutorMsg({

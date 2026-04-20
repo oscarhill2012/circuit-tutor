@@ -15,8 +15,8 @@
 
 import { state } from '../state/store.js';
 import { askTutorAbout } from '../tutor/api.js';
-import { loadInitialCircuit } from '../state/actions.js';
-import { appendTutorMsg } from '../ui/tutorPanel.js';
+import { loadInitialCircuit, clearCircuit } from '../state/actions.js';
+import { appendTutorMsg, clearChat } from '../ui/tutorPanel.js';
 
 export const TASKS = [];
 
@@ -280,6 +280,8 @@ export function enterSandbox() {
   setActiveTask(null);
   hideTaskWidget();
   closeTaskModal();
+  clearChat();
+  clearCircuit();
   appendTutorMsg({
     reply_type: 'direct_explanation',
     assistant_text: "You're in sandbox mode — build whatever you like. Feel free to ask any questions if you find anything interesting or confusing you'd like to discuss.",
@@ -291,12 +293,14 @@ export function startTask(taskId) {
   if (!t) return;
   setActiveTask(taskId);
   closeTaskModal();
-  // Both measure and scenario tasks may pre-load an initial circuit (pinned
-  // components) so the learner just has to wire them up correctly.
-  if ((t.type === 'measure' || t.type === 'scenario')
-      && t.data.initial
-      && state.loadedTaskId !== t.id) {
+  // Fresh task = fresh chat + fresh canvas. The previous task's wiring
+  // and tutor context would otherwise confuse both the student and
+  // Professor Volt on the new problem.
+  clearChat();
+  if ((t.type === 'measure' || t.type === 'scenario') && t.data.initial) {
     loadInitialCircuit(t.data.initial, t.id);
+  } else {
+    clearCircuit();
   }
   showTaskWidget(`${t.topicName} · ${t.difficulty}`);
   renderTask();

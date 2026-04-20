@@ -74,6 +74,16 @@ export function loadInitialCircuit(initial, taskId) {
   simulate(); render();
 }
 
+export function clearCircuit() {
+  pushHistory();
+  state.components = [];
+  state.wires = [];
+  state.selectedId = null;
+  state.lockedIds = new Set();
+  state.loadedTaskId = null;
+  simulate(); render();
+}
+
 export function deleteWire(wid) {
   pushHistory();
   state.wires = state.wires.filter(w => w.id !== wid);
