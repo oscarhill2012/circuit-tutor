@@ -5,10 +5,10 @@
       "id": "mes-1",
       "type": "measure",
       "topicId": "meters",
-      "topicName": "Ohm\u2019s law \u00b7 measure",
+      "topicName": "Measurement",
       "difficulty": "beginner",
       "data": {
-        "brief": "Complete the circuit so the ammeter reads the current through the resistor. Then type the reading below.",
+        "brief": "Measure current through a resistor.",
         "initial": {
           "components": [
             { "id": "C1", "type": "cell",     "x": 300, "y": 300, "props": { "voltage": 6 } },
@@ -30,10 +30,10 @@
       "id": "mes-2",
       "type": "measure",
       "topicId": "meters",
-      "topicName": "Voltmeter placement",
+      "topicName": "Measurement",
       "difficulty": "beginner",
       "data": {
-        "brief": "Connect the cell and voltmeter so V1 reads the p.d. across the bulb. Then type the reading.",
+        "brief": "Measure voltage across a bulb.",
         "initial": {
           "components": [
             { "id": "C1", "type": "cell",      "x": 300, "y": 300, "props": { "voltage": 6 } },
@@ -55,10 +55,10 @@
       "id": "mes-3",
       "type": "measure",
       "topicId": "series-circuits",
-      "topicName": "Series current",
+      "topicName": "Series Circuits",
       "difficulty": "beginner",
       "data": {
-        "brief": "Finish the series loop of two resistors (2 \u03a9 and 4 \u03a9) and an ammeter. What current does A1 read?",
+        "brief": "Find current in a series loop.",
         "initial": {
           "components": [
             { "id": "C1", "type": "cell",     "x": 260, "y": 280, "props": { "voltage": 6 } },
@@ -81,10 +81,10 @@
       "id": "mes-4",
       "type": "measure",
       "topicId": "parallel-circuits",
-      "topicName": "Parallel total current",
+      "topicName": "Parallel Circuits",
       "difficulty": "intermediate",
       "data": {
-        "brief": "Wire the two resistors in parallel across the cell, with the ammeter measuring the TOTAL current from the cell. Enter A1's reading.",
+        "brief": "Measure total current in a parallel circuit.",
         "initial": {
           "components": [
             { "id": "C1", "type": "cell",     "x": 260, "y": 300, "props": { "voltage": 12 } },
@@ -104,8 +104,9 @@
       }
     },
     {
-      "id": "cvr-1", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Current, voltage and resistance", "difficulty": "beginner",
+      "id": "cvr-1", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Ohm's Law", "difficulty": "beginner",
       "data": {
+        "brief": "Use Ohm's law to find current.",
         "question": "A 6 V cell is connected in a series loop with a 2 \u03a9 resistor. What is the current in the circuit?",
         "correctAnswer": 3.0, "unit": "A",
         "workingSteps": ["Apply Ohm's law: V = I \u00d7 R, so I = V / R", "I = 6 / 2", "I = 3.0 A"],
@@ -115,8 +116,9 @@
       }
     },
     {
-      "id": "cvr-2", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Current, voltage and resistance", "difficulty": "beginner",
+      "id": "cvr-2", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Ohm's Law", "difficulty": "beginner",
       "data": {
+        "brief": "Use Ohm's law to find current.",
         "question": "A 12 V cell is connected in a series loop with a 4 \u03a9 resistor. What is the current in the circuit?",
         "correctAnswer": 3.0, "unit": "A",
         "workingSteps": ["Apply Ohm's law: V = I \u00d7 R, so I = V / R", "I = 12 / 4", "I = 3.0 A"],
@@ -126,8 +128,9 @@
       }
     },
     {
-      "id": "cvr-3", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Current, voltage and resistance", "difficulty": "intermediate",
+      "id": "cvr-3", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Ohm's Law", "difficulty": "intermediate",
       "data": {
+        "brief": "Use Ohm's law to find current.",
         "question": "A 9 V cell is connected in a series loop with a 15 \u03a9 resistor. What is the current in the circuit?",
         "correctAnswer": 0.6, "unit": "A",
         "workingSteps": ["Apply Ohm's law: V = I \u00d7 R, so I = V / R", "I = 9 / 15", "I = 0.6 A"],
@@ -137,8 +140,9 @@
       }
     },
     {
-      "id": "cvr-4", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Current, voltage and resistance", "difficulty": "advanced",
+      "id": "cvr-4", "type": "problem", "topicId": "current-voltage-resistance", "topicName": "Ohm's Law", "difficulty": "advanced",
       "data": {
+        "brief": "Use Ohm's law to find current.",
         "question": "A 230 V cell is connected in a series loop with a 46 \u03a9 resistor. What is the current in the circuit?",
         "correctAnswer": 5.0, "unit": "A",
         "workingSteps": ["Apply Ohm's law: V = I \u00d7 R, so I = V / R", "I = 230 / 46", "I = 5.0 A"],
@@ -148,8 +152,9 @@
       }
     },
     {
-      "id": "ser-1", "type": "problem", "topicId": "series-circuits", "topicName": "Series circuits", "difficulty": "beginner",
+      "id": "ser-1", "type": "problem", "topicId": "series-circuits", "topicName": "Series Circuits", "difficulty": "beginner",
       "data": {
+        "brief": "Find voltage across a series resistor.",
         "question": "A 6 V battery is connected in series with a 2 \u03a9 resistor and a 4 \u03a9 resistor. What is the p.d. across the 2 \u03a9 resistor?",
         "correctAnswer": 2.0, "unit": "V",
         "workingSteps": ["Total resistance R_total = 2 + 4 = 6 \u03a9", "Current I = V / R_total = 6 / 6 = 1.0 A", "V\u2081 = I \u00d7 R\u2081 = 1.0 \u00d7 2 = 2.0 V"],
@@ -159,8 +164,9 @@
       }
     },
     {
-      "id": "ser-2", "type": "problem", "topicId": "series-circuits", "topicName": "Series circuits", "difficulty": "intermediate",
+      "id": "ser-2", "type": "problem", "topicId": "series-circuits", "topicName": "Series Circuits", "difficulty": "intermediate",
       "data": {
+        "brief": "Find voltage across a series resistor.",
         "question": "A 12 V battery is connected in series with a 3 \u03a9 resistor and a 9 \u03a9 resistor. What is the p.d. across the 3 \u03a9 resistor?",
         "correctAnswer": 3.0, "unit": "V",
         "workingSteps": ["Total resistance R_total = 3 + 9 = 12 \u03a9", "Current I = V / R_total = 12 / 12 = 1.0 A", "V\u2081 = I \u00d7 R\u2081 = 1.0 \u00d7 3 = 3.0 V"],
@@ -170,8 +176,9 @@
       }
     },
     {
-      "id": "ser-3", "type": "problem", "topicId": "series-circuits", "topicName": "Series circuits", "difficulty": "intermediate",
+      "id": "ser-3", "type": "problem", "topicId": "series-circuits", "topicName": "Series Circuits", "difficulty": "intermediate",
       "data": {
+        "brief": "Find voltage across a series resistor.",
         "question": "A 9 V battery is connected in series with a 5 \u03a9 resistor and a 10 \u03a9 resistor. What is the p.d. across the 5 \u03a9 resistor?",
         "correctAnswer": 3.0, "unit": "V",
         "workingSteps": ["Total resistance R_total = 5 + 10 = 15 \u03a9", "Current I = V / R_total = 9 / 15 = 0.6 A", "V\u2081 = I \u00d7 R\u2081 = 0.6 \u00d7 5 = 3.0 V"],
@@ -181,8 +188,9 @@
       }
     },
     {
-      "id": "par-1", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel circuits", "difficulty": "beginner",
+      "id": "par-1", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel Circuits", "difficulty": "beginner",
       "data": {
+        "brief": "Find total current in parallel branches.",
         "question": "A 6 V cell is connected across two parallel branches: one with a 2 \u03a9 resistor, the other with a 3 \u03a9 resistor. What is the total current drawn from the cell?",
         "correctAnswer": 5.0, "unit": "A",
         "workingSteps": ["In parallel, the p.d. across each branch equals the supply p.d.", "I\u2081 = V / R\u2081 = 6 / 2 = 3.0 A", "I\u2082 = V / R\u2082 = 6 / 3 = 2.0 A", "I_total = I\u2081 + I\u2082 = 5.0 A"],
@@ -192,8 +200,9 @@
       }
     },
     {
-      "id": "par-2", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel circuits", "difficulty": "intermediate",
+      "id": "par-2", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel Circuits", "difficulty": "intermediate",
       "data": {
+        "brief": "Find total current in parallel branches.",
         "question": "A 12 V cell is connected across two parallel branches: one with a 4 \u03a9 resistor, the other with a 6 \u03a9 resistor. What is the total current drawn from the cell?",
         "correctAnswer": 5.0, "unit": "A",
         "workingSteps": ["In parallel, the p.d. across each branch equals the supply p.d.", "I\u2081 = V / R\u2081 = 12 / 4 = 3.0 A", "I\u2082 = V / R\u2082 = 12 / 6 = 2.0 A", "I_total = I\u2081 + I\u2082 = 5.0 A"],
@@ -203,8 +212,9 @@
       }
     },
     {
-      "id": "par-3", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel circuits", "difficulty": "advanced",
+      "id": "par-3", "type": "problem", "topicId": "parallel-circuits", "topicName": "Parallel Circuits", "difficulty": "advanced",
       "data": {
+        "brief": "Find total current in parallel branches.",
         "question": "A 9 V cell is connected across two parallel branches: one with a 10 \u03a9 resistor, the other with a 15 \u03a9 resistor. What is the total current drawn from the cell?",
         "correctAnswer": 1.5, "unit": "A",
         "workingSteps": ["In parallel, the p.d. across each branch equals the supply p.d.", "I\u2081 = V / R\u2081 = 9 / 10 = 0.9 A", "I\u2082 = V / R\u2082 = 9 / 15 = 0.6 A", "I_total = I\u2081 + I\u2082 = 1.5 A"],
@@ -214,8 +224,9 @@
       }
     },
     {
-      "id": "met-1", "type": "scenario", "topicId": "meters", "topicName": "Ammeters and voltmeters", "difficulty": "beginner",
+      "id": "met-1", "type": "scenario", "topicId": "meters", "topicName": "Measurement", "difficulty": "beginner",
       "data": {
+        "brief": "Place ammeter and voltmeter correctly.",
         "narrative": "You want to measure the current through the bulb AND the potential difference across it at the same time.",
         "parameters": { "supply_voltage": 6, "bulb_resistance": 4 },
         "challenge": "Place the ammeter and the voltmeter correctly on the circuit.",
@@ -224,8 +235,9 @@
       }
     },
     {
-      "id": "flt-1", "type": "scenario", "topicId": "fault-finding", "topicName": "Fault-finding", "difficulty": "intermediate",
+      "id": "flt-1", "type": "scenario", "topicId": "fault-finding", "topicName": "Fault Finding", "difficulty": "intermediate",
       "data": {
+        "brief": "Diagnose why the circuit fails.",
         "narrative": "Two bulbs in series with a cell. When you close the switch neither bulb lights up.",
         "parameters": { "supply_voltage": 3, "bulbs": 2 },
         "challenge": "Identify the most likely fault and test it in the simulator.",
@@ -234,8 +246,9 @@
       }
     },
     {
-      "id": "exp-1", "type": "exploration", "topicId": "exploration", "topicName": "Explore circuits", "difficulty": "beginner",
+      "id": "exp-1", "type": "exploration", "topicId": "exploration", "topicName": "Circuit Exploration", "difficulty": "beginner",
       "data": {
+        "brief": "Compare series and parallel brightness.",
         "concept": "Series vs parallel brightness",
         "interactiveElements": ["circuit-canvas", "brightness-meter"],
         "guidedQuestions": [
@@ -254,10 +267,10 @@
       "id": "sp-ser-beg",
       "type": "measure",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Series Circuits",
       "difficulty": "Beginner",
       "data": {
-        "brief": "Build a simple series circuit with the cell, bulb and ammeter, then read the current on A1.",
+        "brief": "Build a series circuit and read the current.",
         "initial": {
           "components": [
             { "id": "C1", "type": "cell",    "x": 300, "y": 300, "props": { "voltage": 6 } },
@@ -279,10 +292,10 @@
       "id": "sp-par-beg",
       "type": "measure",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Parallel Circuits",
       "difficulty": "Beginner",
       "data": {
-        "brief": "Wire the two bulbs in parallel across the 9 V cell and use V1 to measure the p.d. across bulb L1.",
+        "brief": "Measure voltage across a parallel branch.",
         "initial": {
           "components": [
             { "id": "C1", "type": "cell",      "x": 260, "y": 300, "props": { "voltage": 9 } },
@@ -306,9 +319,10 @@
       "id": "sp-ser-int",
       "type": "problem",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Series Circuits",
       "difficulty": "Intermediate",
       "data": {
+        "brief": "Find resistance from voltage and current.",
         "question": "In a series circuit a resistor has 6 V across it and a current of 2 A flowing through it. What is its resistance?",
         "correctAnswer": 3.0, "unit": "\u03a9",
         "workingSteps": [
@@ -325,9 +339,10 @@
       "id": "sp-par-int",
       "type": "problem",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Parallel Circuits",
       "difficulty": "Intermediate",
       "data": {
+        "brief": "Find branch resistance in a parallel circuit.",
         "question": "A branch in a parallel circuit has 12 V across it and a current of 3 A flowing through it. What is the branch resistance?",
         "correctAnswer": 4.0, "unit": "\u03a9",
         "workingSteps": [
@@ -345,9 +360,10 @@
       "id": "sp-ser-exp",
       "type": "scenario",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Series Circuits",
       "difficulty": "Expert",
       "data": {
+        "brief": "Verify Ohm's law in a series circuit.",
         "narrative": "You have a 12 V cell, a resistor R1, an ammeter A1 and a voltmeter V1. Build a series circuit that lets you measure both the current through R1 and the p.d. across R1.",
         "challenge": "Verify that R1 is 4 \u03a9 using A1 and V1 with R = V / I.",
         "parameters": { "supply_voltage": 12, "target_resistance": 4 },
@@ -380,9 +396,10 @@
       "id": "sp-par-exp",
       "type": "scenario",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Parallel Circuits",
       "difficulty": "Expert",
       "data": {
+        "brief": "Verify Ohm's law on a parallel branch.",
         "narrative": "Two resistors are connected in parallel across a 12 V cell: R1 (the branch you care about) and R2 (a second branch). A1 should read the current through R1 only, and V1 should read the p.d. across R1.",
         "challenge": "Verify that R1 is 6 \u03a9 using the branch readings on A1 and V1 with R = V / I.",
         "parameters": { "supply_voltage": 12, "target_resistance": 6, "other_branch": 12 },
@@ -417,9 +434,10 @@
       "id": "sp-exp-series-bright",
       "type": "exploration",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Circuit Exploration",
       "difficulty": "Beginner",
       "data": {
+        "brief": "Explore bulb brightness in series.",
         "concept": "Bulb brightness in a series circuit",
         "interactiveElements": ["circuit-canvas"],
         "guidedQuestions": [
@@ -440,9 +458,10 @@
       "id": "sp-exp-parallel-bright",
       "type": "exploration",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Circuit Exploration",
       "difficulty": "Intermediate",
       "data": {
+        "brief": "Explore bulb brightness in parallel.",
         "concept": "Bulb brightness in a parallel circuit",
         "interactiveElements": ["circuit-canvas"],
         "guidedQuestions": [
@@ -463,9 +482,10 @@
       "id": "sp-exp-meters",
       "type": "exploration",
       "topicId": "series-parallel",
-      "topicName": "Series and Parallel Circuits",
+      "topicName": "Measurement",
       "difficulty": "Expert",
       "data": {
+        "brief": "Explore the limits of real meters.",
         "concept": "Real ammeters and voltmeters are not perfect",
         "interactiveElements": ["circuit-canvas"],
         "guidedQuestions": [
