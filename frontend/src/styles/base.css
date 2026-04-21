@@ -59,7 +59,7 @@ button { font-family: inherit; color: inherit; }
 .wire:hover { stroke: var(--info); cursor: pointer; }
 .comp text { font-family: 'JetBrains Mono', monospace; fill: var(--muted); font-size: 10px; }
 .comp .label { fill: var(--text); font-weight: 600; font-size: 11px; }
-.comp .val { fill: var(--accent-2); font-size: 13px; }
+.comp .val { fill: var(--accent-2); font-size: 10px; }
 .comp .val.v { fill: var(--q-v); }
 .comp .val.i { fill: var(--q-i); }
 .comp .val.r { fill: var(--q-r); }
@@ -112,7 +112,7 @@ button { font-family: inherit; color: inherit; }
 }
 .meter-lcd-text {
   fill: #2de2b3; font-family: 'JetBrains Mono', monospace;
-  font-weight: 700; font-size: 13px; letter-spacing: 0.5px;
+  font-weight: 700; font-size: 12px; letter-spacing: 0.5px;
 }
 .meter-lcd-text.v { fill: #ffcf5c; }
 .meter-lcd-bg.v { stroke: #ffcf5c; filter: drop-shadow(0 0 3px rgba(255,207,92,0.4)); }
