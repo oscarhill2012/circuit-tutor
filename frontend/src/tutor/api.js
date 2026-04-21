@@ -22,8 +22,9 @@ function circuitSnapshot() {
   const comps = state.components.slice(0, MAX_COMPONENTS_IN_SNAPSHOT).map(c => ({
     id: c.id, type: c.type, props: c.props,
   }));
+  const epLabel = (ep) => ep.junctionId ? `J:${ep.junctionId}` : `${ep.compId}.${ep.term}`;
   const wires = state.wires.slice(0, MAX_WIRES_IN_SNAPSHOT).map(w => ({
-    id: w.id, from: `${w.a.compId}.${w.a.term}`, to: `${w.b.compId}.${w.b.term}`,
+    id: w.id, from: epLabel(w.a), to: epLabel(w.b),
   }));
   const meters = state.components
     .filter(c => c.type === 'ammeter' || c.type === 'voltmeter')

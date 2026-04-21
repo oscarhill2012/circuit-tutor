@@ -40,6 +40,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed
 function resetState() {
   state.components = [];
   state.wires = [];
+  state.junctions = [];
   state.pendingWire = null;
   state.selectedId = null;
   state.nextId = 1;

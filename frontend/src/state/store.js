@@ -8,8 +8,9 @@ export const SVG_H = 1000;
 export const EPS = 1e-9;
 
 export const state = {
-  components: [],   // {id, type, x, y, rot, props}
-  wires: [],        // {id, a:{compId,term}, b:{compId,term}}
+  components: [],   // {id, type, x, y, props}
+  junctions: [],    // {id, x, y} — wire-to-wire T-junctions
+  wires: [],        // {id, a, b, path?} — a/b each {compId,term} or {junctionId}
   selectedId: null,
   tool: 'select',
   pendingWire: null,   // {from:{compId,term}, mouseX, mouseY}

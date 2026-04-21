@@ -8,7 +8,7 @@
 // synchronously in the browser.
 
 import { state } from '../../state/store.js';
-import { termPos, exitDir, advance } from '../geometry.js';
+import { endpointPos, endpointDir, advance } from '../geometry.js';
 import { collectComponentBoxes, collectWireSegments } from './obstacles.js';
 
 // Tunables --------------------------------------------------------------
@@ -36,22 +36,25 @@ const LANE_STEP = 10;     // offset applied when a cleaner lane is available
  * @returns {{x:number,y:number}[]|null}
  */
 export function route(source, target, opts = {}) {
-  const srcComp = state.components.find(c => c.id === source.compId);
-  const tgtComp = state.components.find(c => c.id === target.compId);
-  if (!srcComp || !tgtComp) return null;
+  const srcPt = endpointPos(source);
+  const tgtPt = endpointPos(target);
+  if (!srcPt || !tgtPt) return null;
 
-  const srcPt = termPos(srcComp, source.term);
-  const tgtPt = termPos(tgtComp, target.term);
-  const srcDir = exitDir(srcComp, source.term);
-  const tgtDir = exitDir(tgtComp, target.term);
+  const srcDir = endpointDir(source, target);
+  const tgtDir = endpointDir(target, source);
 
-  const excludeComps = opts.excludeComps || [source.compId, target.compId];
+  const excludeComps = opts.excludeComps
+    || [source.compId, target.compId].filter(Boolean);
   const excludeWires = opts.excludeWires || [];
   const obstacles = collectComponentBoxes(excludeComps);
   const wireSegs = collectWireSegments(excludeWires);
 
-  const srcStub = advance(srcPt, srcDir, STUB);
-  const tgtStub = advance(tgtPt, tgtDir, STUB);
+  // Junction endpoints have no body, so they don't need a forced stub; start
+  // the search right at the point and let A* pick any of 4 directions.
+  const srcStubLen = source.junctionId ? 0 : STUB;
+  const tgtStubLen = target.junctionId ? 0 : STUB;
+  const srcStub = advance(srcPt, srcDir, srcStubLen);
+  const tgtStub = advance(tgtPt, tgtDir, tgtStubLen);
 
   // Lines of the sparse routing grid. We include the stub and terminal
   // coordinates so they always land on grid intersections.

@@ -11,7 +11,7 @@
 import { state } from '../state/store.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
 import { render, svg, rerouteWiresFor, keyOfTerm } from './renderer.js';
-import { termPos } from './geometry.js';
+import { termPos, endpointPos, endpointKey } from './geometry.js';
 import { route as routePath, segCross } from './wiring/router.js';
 import { previewPath } from './wiring/path.js';
 import { updateReadout } from '../ui/canvas.js';
@@ -21,6 +21,7 @@ import { createWireInteractionController } from './wiring/controller.js';
 export const editor = {
   hoveredTerm: null,
   invalidHoverKey: null,
+  hoveredWireId: null, // id of the wire currently under the cursor
   dragging: null,   // {compId, offsetX, offsetY, moved, started}
   previewEl: null,  // set by renderer.render() for the pending preview wire
 };
@@ -30,7 +31,9 @@ const validator = createValidator(() => state);
 const controller = createWireInteractionController({
   validator,
   onCommit(from, to) {
-    const path = routePath(from, to, { excludeComps: [from.compId, to.compId] });
+    const path = routePath(from, to, {
+      excludeComps: [from.compId, to.compId].filter(Boolean),
+    });
     pushHistory();
     const wire = {
       id: 'W' + (state.nextId++),
@@ -44,7 +47,7 @@ const controller = createWireInteractionController({
   },
   onChange({ status, pending, invalidHover, previewMove }) {
     state.pendingWire = pending;
-    editor.invalidHoverKey = invalidHover ? keyOfTerm(invalidHover.compId, invalidHover.term) : null;
+    editor.invalidHoverKey = invalidHover ? endpointKey(invalidHover) : null;
     svg.classList.toggle('wiring', !!pending);
     // Pointer-move updates while a wire is pending are extremely frequent.
     // Doing a full SVG rebuild on every move destroys the terminal element
@@ -53,9 +56,8 @@ const controller = createWireInteractionController({
     // For pure preview-follow updates, mutate the existing preview path's `d`
     // attribute in place instead.
     if (previewMove && pending && editor.previewEl) {
-      const ca = state.components.find(c => c.id === pending.from.compId);
-      if (ca) {
-        const p1 = termPos(ca, pending.from.term);
+      const p1 = endpointPos(pending.from);
+      if (p1) {
         const p2 = { x: pending.mouseX, y: pending.mouseY };
         editor.previewEl.setAttribute('d', previewPath(p1, p2));
       }
@@ -64,7 +66,7 @@ const controller = createWireInteractionController({
     render();
   },
   onReject(port, reason) {
-    editor.invalidHoverKey = keyOfTerm(port.compId, port.term);
+    editor.invalidHoverKey = endpointKey(port);
     render();
     if (reason === 'duplicate') flashInvalidHint();
   },
@@ -108,6 +110,7 @@ export function maybeSwapCrossedTerminals(compId) {
   const [w1, w2] = attached;
   const end1 = w1.a.compId === compId ? 'a' : 'b';
   const end2 = w2.a.compId === compId ? 'a' : 'b';
+  if (!w1[end1].term || !w2[end2].term) return false;
   if (w1[end1].term === w2[end2].term) return false;
   const before = countPathCrossings(w1.path, w2.path);
   if (before === 0) return false;
@@ -138,17 +141,20 @@ export function onCompMouseDown(ev, c) {
   render();
 }
 
-export function onTerminalPointerDown(ev, compId, term) {
+export function onTerminalPointerDown(ev, compId, term, junctionId) {
+  const port = junctionId ? { junctionId } : { compId, term };
   if (state.tool === 'delete') {
+    const matches = junctionId
+      ? (w) => w.a.junctionId === junctionId || w.b.junctionId === junctionId
+      : (w) => (w.a.compId === compId && w.a.term === term)
+            || (w.b.compId === compId && w.b.term === term);
     const before = state.wires.length;
-    state.wires = state.wires.filter(w =>
-      !(w.a.compId === compId && w.a.term === term) &&
-      !(w.b.compId === compId && w.b.term === term));
+    state.wires = state.wires.filter(w => !matches(w));
     if (state.wires.length !== before) { pushHistory(); simulate(); render(); }
     return;
   }
   const pt = svgPoint(ev);
-  controller.onConnectorClick({ compId, term }, pt);
+  controller.onConnectorClick(port, pt);
 }
 
 export function findTerminalAtClient(clientX, clientY) {
@@ -166,12 +172,14 @@ export function findTerminalAtClient(clientX, clientY) {
   if (!el) return null;
   const hit = el.closest && el.closest('.terminal.hit');
   if (!hit) return null;
+  const jid = hit.getAttribute('data-junction');
+  if (jid) return { junctionId: jid };
   return { compId: hit.getAttribute('data-comp'), term: hit.getAttribute('data-tname') };
 }
 
 export function updateWireHoverTarget(clientX, clientY) {
   const tgt = findTerminalAtClient(clientX, clientY);
-  const tgtKey = tgt ? keyOfTerm(tgt.compId, tgt.term) : null;
+  const tgtKey = tgt ? (tgt.junctionId ? 'J:' + tgt.junctionId : keyOfTerm(tgt.compId, tgt.term)) : null;
   if (tgtKey === editor.hoveredTerm) {
     controller.onHoverTarget(tgt);
     return;
@@ -183,9 +191,10 @@ export function updateWireHoverTarget(clientX, clientY) {
     el.classList.remove('hover');
   });
   if (tgt) {
-    const hit = document.querySelector(
-      '.terminal.hit[data-comp="' + tgt.compId + '"][data-tname="' + tgt.term + '"]'
-    );
+    const sel = tgt.junctionId
+      ? '.terminal.hit[data-junction="' + tgt.junctionId + '"]'
+      : '.terminal.hit[data-comp="' + tgt.compId + '"][data-tname="' + tgt.term + '"]';
+    const hit = document.querySelector(sel);
     if (hit) {
       const visible = hit.previousElementSibling;
       if (visible && visible.classList.contains('terminal')) visible.classList.add('hover');

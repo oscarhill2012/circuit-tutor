@@ -78,6 +78,29 @@ button { font-family: inherit; color: inherit; }
 .bar-label.i { fill: var(--q-i); }
 .bar-label.r { fill: var(--q-r); }
 
+/* Wire-to-wire junctions and corner-connector dots */
+.junction {
+  fill: #7a8bb0; stroke: #cfd7ea; stroke-width: 1.2;
+  transition: all 120ms;
+}
+.junction.hover { stroke: var(--accent); fill: rgba(45,226,179,0.6); r: 6; }
+.junction.valid { stroke: var(--accent); fill: rgba(45,226,179,0.35); animation: pulse 1.2s infinite; }
+.junction.invalid { stroke: var(--danger); fill: rgba(255,107,138,0.35); }
+.junction.source {
+  stroke: var(--accent); stroke-width: 2.5;
+  fill: rgba(45,226,179,0.7);
+  r: 6.5;
+  filter: drop-shadow(0 0 6px rgba(45,226,179,0.7));
+}
+.wire-corner {
+  fill: rgba(45,226,179,0.15); stroke: var(--accent);
+  stroke-width: 1; stroke-dasharray: 2 2;
+  pointer-events: none;
+  transition: all 120ms;
+}
+.wire-corner-hit { cursor: crosshair; }
+.wire-hover-hit { cursor: crosshair; }
+
 /* Digital display for meters */
 .meter-lcd-bg {
   fill: #081018; stroke: #2de2b3; stroke-width: 1;

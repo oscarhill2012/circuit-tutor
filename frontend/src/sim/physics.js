@@ -43,8 +43,10 @@
   function simulate(state, COMP) {
     const comps = state.components;
     const wires = state.wires;
+    const juncs = state.junctions || [];
 
     const keyOf = (cid, tn) => cid + '.' + tn;
+    const epKey = (ep) => ep.junctionId ? 'J:' + ep.junctionId : keyOf(ep.compId, ep.term);
     const parent = {};
     const find = k => {
       if (parent[k] === undefined) parent[k] = k;
@@ -54,7 +56,8 @@
     const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
 
     for (const c of comps) for (const t of COMP[c.type].terms) find(keyOf(c.id, t.n));
-    for (const w of wires) union(keyOf(w.a.compId, w.a.term), keyOf(w.b.compId, w.b.term));
+    for (const j of juncs) find('J:' + j.id);
+    for (const w of wires) union(epKey(w.a), epKey(w.b));
     for (const c of comps) if (c.type === 'switch' && c.props.closed) union(keyOf(c.id, 'a'), keyOf(c.id, 'b'));
 
     const nodeOf = {};
@@ -64,6 +67,7 @@
       if (nodeOf[r] === undefined) { nodeOf[r] = nodeKeys.length; nodeKeys.push(r); }
     }
     const getNode = (cid, tn) => nodeOf[find(keyOf(cid, tn))];
+    const getNodeByEp = (ep) => ep ? nodeOf[find(epKey(ep))] : undefined;
 
     const N = nodeKeys.length;
     if (N === 0) return { ok: true, empty: true, nodes: [], elements: [] };
@@ -87,7 +91,7 @@
         ok: true, empty: false, noSource: true,
         nodes: new Array(N).fill(0),
         elements: elems.map(e => ({ ...e, current: 0, drop: 0 })),
-        getNode,
+        getNode, getNodeByEp,
       };
     }
 
@@ -123,7 +127,7 @@
         ok: false, error: 'Circuit is shorted or ill-defined',
         nodes: new Array(N).fill(0),
         elements: elems.map(e => ({ ...e, current: 0, drop: 0 })),
-        getNode,
+        getNode, getNodeByEp,
       };
     }
 
@@ -157,14 +161,14 @@
       const clamped = results.map(e => ({ ...e, current: 0, drop: 0 }));
       return {
         ok: true, empty: false, isShort: true, isOpen: false,
-        nodes: V, elements: clamped, getNode,
+        nodes: V, elements: clamped, getNode, getNodeByEp,
         supplyV: Vsrcs[0].value, totalI: 0,
       };
     }
 
     return {
       ok: true, empty: false,
-      nodes: V, elements: results, getNode,
+      nodes: V, elements: results, getNode, getNodeByEp,
       supplyV: Vsrcs[0].value, totalI: mainI, isOpen,
     };
   }
