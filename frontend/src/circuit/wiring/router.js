@@ -12,7 +12,9 @@ import { endpointPos, endpointDir, advance } from '../geometry.js';
 import { collectComponentBoxes, collectWireSegments } from './obstacles.js';
 
 // Tunables --------------------------------------------------------------
-const STUB = 18;          // length of mandatory source/target stub
+const STUB = 100;         // length of mandatory source/target stub
+                           // (sized to fit a current-readout bar plus
+                           // breathing room: 12px gap + 58px bar + 30px tail)
 const BEND_COST = 22;     // penalty per 90° turn
 const CROSSING_COST = 220; // penalty per existing wire crossed — strongly discouraged
 const OVERLAP_COST = 240; // penalty per axis-aligned overlap with existing wire
@@ -49,10 +51,10 @@ export function route(source, target, opts = {}) {
   const obstacles = collectComponentBoxes(excludeComps);
   const wireSegs = collectWireSegments(excludeWires);
 
-  // Junction endpoints have no body, so they don't need a forced stub; start
-  // the search right at the point and let A* pick any of 4 directions.
-  const srcStubLen = source.junctionId ? 0 : STUB;
-  const tgtStubLen = target.junctionId ? 0 : STUB;
+  // Force the same stub length on every endpoint (including junctions) so
+  // each wire has room for a current-readout bar before any 90° bend.
+  const srcStubLen = STUB;
+  const tgtStubLen = STUB;
   const srcStub = advance(srcPt, srcDir, srcStubLen);
   const tgtStub = advance(tgtPt, tgtDir, tgtStubLen);
 

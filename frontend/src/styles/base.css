@@ -73,7 +73,11 @@ button { font-family: inherit; color: inherit; }
 .vbar-bg { fill: #1a2440; stroke: #2a3558; stroke-width: 0.5; }
 .vbar-fg { fill: var(--q-v); filter: drop-shadow(0 0 2px rgba(255,207,92,0.7)); }
 .ibar-fg { fill: var(--q-i); filter: drop-shadow(0 0 2px rgba(45,226,179,0.7)); }
-.bar-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; }
+/* Opaque background for wire-overlay current bars — must fully hide the
+   wire stroke beneath. Slightly heavier border than vbar-bg for the same
+   reason. */
+.ibar-bg { fill: #1a2440; stroke: #3a466e; stroke-width: 1; }
+.bar-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; }
 .bar-label.v { fill: var(--q-v); }
 .bar-label.i { fill: var(--q-i); }
 .bar-label.r { fill: var(--q-r); }

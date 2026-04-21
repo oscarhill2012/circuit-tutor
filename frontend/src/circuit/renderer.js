@@ -116,6 +116,10 @@ export function render() {
   for (let y = 0; y <= SVG_H; y += GRID_PX) grid.appendChild(svgEl('line', { class:'grid-line', x1:0, y1:y, x2:SVG_W, y2:y }));
   svg.appendChild(grid);
 
+  // Plan all current bars before drawing wires so we can trim the wire path
+  // back from each "barred" end and avoid wire underlapping the bar.
+  const wireBars = planWireBars();
+
   // Render wires (before components so they are below)
   const wiresG = svgEl('g', { class: 'wires' });
   const draggingComp = editor.dragging ? editor.dragging.compId : null;
@@ -125,8 +129,13 @@ export function render() {
     // single drop still gets a proper post-drag reroute.
     const isLive = draggingComp && (w.a.compId === draggingComp || w.b.compId === draggingComp);
     const pts = isLive ? null : resolveWirePath(w);
-    const drawPts = isLive ? dragPreviewPts(w) : pts;
-    if (!drawPts) continue;
+    const fullPts = isLive ? dragPreviewPts(w) : pts;
+    if (!fullPts) continue;
+    const barEntry = isLive ? null : wireBars.get(w.id);
+    const drawPts = barEntry
+      ? trimPath(fullPts, trimDistance(barEntry.start), trimDistance(barEntry.end))
+      : fullPts;
+    if (!drawPts || drawPts.length < 2) continue;
     let cls = 'wire';
     if (state.selectedId === 'wire:' + w.id) cls += ' selected';
     if (state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen && state.toggles.current) {
@@ -258,8 +267,8 @@ export function render() {
     }
   }
 
-  // Kirchhoff current bars at junctions with ≥3 wires.
-  renderJunctionKcl(svg);
+  // Current bars overlaid on each wire (component bars + KCL junction bars).
+  renderWireBars(svg, wireBars);
 
   updateHUD();
   updateReadout();
@@ -379,27 +388,21 @@ export function renderComponent(c) {
     }
   }
 
-  // Voltage drop + current bars for resistors/bulbs, placed below the body.
-  const showBars = simEl && (c.type === 'bulb' || c.type === 'resistor')
-    && state.sim && state.sim.ok && !state.sim.isShort;
-  if (showBars) {
+  // Voltage drop bar for resistors/bulbs, placed below the body. The current
+  // bar that used to live here was promoted to a wire overlay (see
+  // planWireBars / drawWireBar below) so it can also visualise KCL splits at
+  // junctions.
+  const showVBar = simEl && (c.type === 'bulb' || c.type === 'resistor')
+    && state.sim && state.sim.ok && !state.sim.isShort
+    && state.toggles.voltage && state.sim.supplyV > 0;
+  if (showVBar) {
     const barLen = 60, barT = 7;
     const yBase = bh / 2 + 22;
-    if (state.toggles.voltage && state.sim.supplyV > 0) {
-      const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
-      g.appendChild(svgEl('rect', { class:'vbar-bg', x:-barLen/2, y: yBase, width: barLen, height: barT, rx:2 }));
-      g.appendChild(svgEl('rect', { class:'vbar-fg', x:-barLen/2, y: yBase, width: barLen*vfrac, height: barT, rx:2 }));
-      g.appendChild(svgEl('text', { x: -barLen/2 - 4, y: yBase + barT - 1, 'text-anchor':'end', class:'bar-label v' }, 'V'));
-      g.appendChild(svgEl('text', { x: barLen/2 + 4, y: yBase + barT - 1, class:'bar-label v' }, `${Math.abs(simEl.drop).toFixed(2)}V`));
-    }
-    if (state.toggles.current && state.sim.totalI > 0) {
-      const ifrac = Math.min(1, Math.abs(simEl.current) / Math.max(state.sim.totalI, EPS));
-      const y2 = yBase + barT + 4;
-      g.appendChild(svgEl('rect', { class:'vbar-bg', x:-barLen/2, y: y2, width: barLen, height: barT, rx:2 }));
-      g.appendChild(svgEl('rect', { class:'ibar-fg', x:-barLen/2, y: y2, width: barLen*ifrac, height: barT, rx:2 }));
-      g.appendChild(svgEl('text', { x: -barLen/2 - 4, y: y2 + barT - 1, 'text-anchor':'end', class:'bar-label i' }, 'I'));
-      g.appendChild(svgEl('text', { x: barLen/2 + 4, y: y2 + barT - 1, class:'bar-label i' }, `${Math.abs(simEl.current).toFixed(2)}A`));
-    }
+    const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
+    g.appendChild(svgEl('rect', { class:'vbar-bg', x:-barLen/2, y: yBase, width: barLen, height: barT, rx:2 }));
+    g.appendChild(svgEl('rect', { class:'vbar-fg', x:-barLen/2, y: yBase, width: barLen*vfrac, height: barT, rx:2 }));
+    g.appendChild(svgEl('text', { x: -barLen/2 - 4, y: yBase + barT - 1, 'text-anchor':'end', class:'bar-label v' }, 'V'));
+    g.appendChild(svgEl('text', { x: barLen/2 + 4, y: yBase + barT - 1, class:'bar-label v' }, `${Math.abs(simEl.drop).toFixed(2)}V`));
   }
 
   return g;
@@ -441,48 +444,190 @@ function kclCurrentThroughWire(j, wire) {
   return sum;
 }
 
-function renderJunctionKcl(root) {
-  if (!state.sim || !state.sim.ok || state.sim.empty || state.sim.isOpen || state.sim.isShort) return;
-  if (!state.toggles.current) return;
-  const g = svgEl('g', { class: 'kcl-bars' });
+// ---------------------------------------------------------------------------
+// Current bars overlaid on wires.
+//
+// Visualisation rules (see project conversation):
+//  * One bar per circuit component (cell/battery/resistor/bulb), placed on
+//    the wire leaving its right-side terminal by default. Filled to 100%
+//    because all of the component's current flows through that wire.
+//  * One bar per outgoing wire at every ≥3-way junction, filled as a
+//    fraction of the total current entering the junction (sum |I|/2). This
+//    makes Kirchhoff's current law visible: a wire carrying half the
+//    junction's flow looks half-full.
+//  * If a wire already has a junction bar (at either end), the connected
+//    component's bar is suppressed for that wire — try the component's
+//    other terminal, otherwise no bar at all. So a series loop of N
+//    components shows at most N bars total.
+//  * The wire is trimmed back from each "barred" end so the bar sits
+//    cleanly on the wire instead of underlapping it.
+// ---------------------------------------------------------------------------
+
+const COMP_BAR_TYPES = new Set(['cell', 'battery', 'resistor', 'bulb']);
+const BAR_LEN = 58;          // length along the wire
+const BAR_T = 14;            // thickness perpendicular to the wire
+const TERMINAL_GAP = 12;     // breathing space between terminal and bar
+const POST_BAR_GAP = 4;      // tiny gap between bar end and wire resumption
+
+function planWireBars() {
+  // Returns Map<wireId, { start?: barInfo, end?: barInfo }>
+  // where 'start' means the wire's `a` endpoint and 'end' means `b`.
+  const bars = new Map();
+  if (!state.sim || !state.sim.ok || state.sim.empty || state.sim.isOpen || state.sim.isShort) return bars;
+  if (!state.toggles.current) return bars;
+
+  const claim = (wid, atStart, info) => {
+    let entry = bars.get(wid);
+    if (!entry) { entry = {}; bars.set(wid, entry); }
+    entry[atStart ? 'start' : 'end'] = info;
+  };
+
+  // 1) Junction bars on every wire of every ≥3-way junction.
   for (const j of state.junctions) {
     const attached = state.wires.filter(w =>
       w.a.junctionId === j.id || w.b.junctionId === j.id);
     if (attached.length < 3) continue;
-    const stubs = [];
-    for (const w of attached) {
-      const pts = resolveWirePath(w);
-      if (!pts || pts.length < 2) continue;
-      const nearStart = (w.a.junctionId === j.id);
-      const p0 = nearStart ? pts[0] : pts[pts.length - 1];
-      const p1 = nearStart ? pts[1] : pts[pts.length - 2];
-      const I = kclCurrentThroughWire(j, w);
-      stubs.push({ p0, p1, I });
-    }
-    const maxI = Math.max(1e-6, ...stubs.map(s => Math.abs(s.I)));
+    const stubs = attached.map(w => ({ wire: w, I: kclCurrentThroughWire(j, w) }));
+    // Kirchhoff: total current arriving at the junction = sum of out-flows
+    // = (sum of |branch currents|) / 2. Use that as the denominator so
+    // smaller branches read as obviously not-full.
+    const total = stubs.reduce((s, x) => s + Math.abs(x.I), 0) / 2;
     for (const s of stubs) {
-      const frac = Math.min(1, Math.abs(s.I) / maxI);
-      const dx = s.p1.x - s.p0.x, dy = s.p1.y - s.p0.y;
-      const horiz = Math.abs(dx) > Math.abs(dy);
-      const dir = horiz ? Math.sign(dx) : Math.sign(dy);
-      const barLen = 42, barT = 6;
-      // Place bar along the outgoing stub, offset perpendicularly.
-      const along = 18; // distance from junction along the wire
-      const perp = 10;  // perpendicular offset
-      const cx = horiz ? s.p0.x + dir * along : s.p0.x + perp;
-      const cy = horiz ? s.p0.y + perp : s.p0.y + dir * along;
-      if (horiz) {
-        g.appendChild(svgEl('rect', { class:'vbar-bg', x: cx - barLen/2, y: cy, width: barLen, height: barT, rx:2 }));
-        g.appendChild(svgEl('rect', { class:'ibar-fg', x: cx - barLen/2, y: cy, width: barLen * frac, height: barT, rx:2 }));
-        g.appendChild(svgEl('text', { x: cx, y: cy + barT + 10, 'text-anchor':'middle', class:'bar-label i' }, `${Math.abs(s.I).toFixed(2)}A`));
-      } else {
-        g.appendChild(svgEl('rect', { class:'vbar-bg', x: cx, y: cy - barLen/2, width: barT, height: barLen, rx:2 }));
-        g.appendChild(svgEl('rect', { class:'ibar-fg', x: cx, y: cy - barLen/2 + barLen * (1 - frac), width: barT, height: barLen * frac, rx:2 }));
-        g.appendChild(svgEl('text', { x: cx + barT + 4, y: cy + 3, class:'bar-label i' }, `${Math.abs(s.I).toFixed(2)}A`));
-      }
+      const frac = total > EPS ? Math.min(1, Math.abs(s.I) / total) : 0;
+      const atStart = s.wire.a.junctionId === j.id;
+      claim(s.wire.id, atStart, { I: s.I, frac });
     }
   }
+
+  // 2) One bar per eligible component, on the right-side terminal's wire
+  //    if available, falling back to the other terminal.
+  for (const c of state.components) {
+    if (!COMP_BAR_TYPES.has(c.type)) continue;
+    const simEl = state.sim.elements.find(e => e.comp && e.comp.id === c.id);
+    if (!simEl || Math.abs(simEl.current) < 1e-5) continue;
+    // Sort terminals by x descending so the rightmost is tried first.
+    const terms = [...COMP[c.type].terms].sort((a, b) => b.x - a.x);
+    for (const t of terms) {
+      const wire = state.wires.find(w =>
+        (w.a.compId === c.id && w.a.term === t.n) ||
+        (w.b.compId === c.id && w.b.term === t.n));
+      if (!wire) continue;
+      const existing = bars.get(wire.id);
+      if (existing && (existing.start || existing.end)) continue; // claimed by junction
+      const atStart = (wire.a.compId === c.id && wire.a.term === t.n);
+      claim(wire.id, atStart, { I: simEl.current, frac: 1 });
+      break;
+    }
+  }
+
+  return bars;
+}
+
+// How many pixels of wire path to hide at this end (gap + bar + small tail
+// so the wire visibly "starts after" the bar).
+function trimDistance(barInfo) {
+  return barInfo ? TERMINAL_GAP + BAR_LEN + POST_BAR_GAP : 0;
+}
+
+function trimPath(pts, fromStart, fromEnd) {
+  if (!pts || pts.length < 2) return pts;
+  let arr = pts.map(p => ({ x: p.x, y: p.y }));
+  if (fromStart > 0) arr = trimOneEnd(arr, fromStart, true);
+  if (!arr || arr.length < 2) return null;
+  if (fromEnd > 0) arr = trimOneEnd(arr, fromEnd, false);
+  if (!arr || arr.length < 2) return null;
+  return arr;
+}
+
+function trimOneEnd(pts, dist, fromStart) {
+  let arr = fromStart ? pts.slice() : pts.slice().reverse();
+  let remaining = dist;
+  while (arr.length >= 2 && remaining > 0) {
+    const a = arr[0], b = arr[1];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (segLen <= remaining) {
+      arr.shift();
+      remaining -= segLen;
+    } else {
+      const t = remaining / segLen;
+      arr[0] = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      remaining = 0;
+    }
+  }
+  if (arr.length < 2) return null;
+  return fromStart ? arr : arr.reverse();
+}
+
+function renderWireBars(root, bars) {
+  const g = svgEl('g', { class: 'wire-bars', 'pointer-events': 'none' });
+  for (const w of state.wires) {
+    const entry = bars.get(w.id);
+    if (!entry) continue;
+    const pts = resolveWirePath(w);
+    if (!pts || pts.length < 2) continue;
+    if (entry.start) drawWireBar(g, pts, true, entry.start);
+    if (entry.end) drawWireBar(g, pts, false, entry.end);
+  }
   root.appendChild(g);
+}
+
+function drawWireBar(g, pts, atStart, info) {
+  const a = atStart ? pts[0] : pts[pts.length - 1];
+  const b = atStart ? pts[1] : pts[pts.length - 2];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const segLen = Math.hypot(dx, dy);
+  if (segLen < TERMINAL_GAP + BAR_LEN) return; // first segment too short — bail
+  const ux = dx / segLen, uy = dy / segLen;
+
+  const bx0 = a.x + ux * TERMINAL_GAP;
+  const by0 = a.y + uy * TERMINAL_GAP;
+
+  const horiz = Math.abs(ux) > Math.abs(uy);
+  let rectX, rectY, rectW, rectH;
+  if (horiz) {
+    rectX = ux > 0 ? bx0 : bx0 - BAR_LEN;
+    rectY = by0 - BAR_T / 2;
+    rectW = BAR_LEN;
+    rectH = BAR_T;
+  } else {
+    rectX = bx0 - BAR_T / 2;
+    rectY = uy > 0 ? by0 : by0 - BAR_LEN;
+    rectW = BAR_T;
+    rectH = BAR_LEN;
+  }
+  g.appendChild(svgEl('rect', {
+    class: 'ibar-bg', x: rectX, y: rectY, width: rectW, height: rectH, rx: 3,
+  }));
+
+  const frac = Math.min(1, Math.max(0, info.frac));
+  const fillLen = BAR_LEN * frac;
+  let fx = rectX, fy = rectY, fw = rectW, fh = rectH;
+  if (horiz) {
+    fw = fillLen;
+    if (ux < 0) fx = rectX + (BAR_LEN - fillLen);
+  } else {
+    fh = fillLen;
+    if (uy < 0) fy = rectY + (BAR_LEN - fillLen);
+  }
+  g.appendChild(svgEl('rect', {
+    class: 'ibar-fg', x: fx, y: fy, width: fw, height: fh, rx: 3,
+  }));
+
+  // Reading text just below (or beside, for vertical bars) the bar.
+  const cx = rectX + rectW / 2;
+  const cy = rectY + rectH / 2;
+  const label = `${Math.abs(info.I).toFixed(2)}A`;
+  if (horiz) {
+    g.appendChild(svgEl('text', {
+      x: cx, y: rectY + rectH + 12,
+      'text-anchor': 'middle', class: 'bar-label i',
+    }, label));
+  } else {
+    g.appendChild(svgEl('text', {
+      x: rectX + rectW + 6, y: cy + 4,
+      class: 'bar-label i',
+    }, label));
+  }
 }
 
 export function applyVisualInstructions(instrs) {
