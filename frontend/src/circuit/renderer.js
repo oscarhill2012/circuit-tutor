@@ -311,7 +311,7 @@ export function renderComponent(c) {
     if (state.toggles.labels) {
       g.appendChild(svgEl('text', { x:-w/2+4, y:-16, class:'label' }, '+'));
       g.appendChild(svgEl('text', { x: w/2-10, y:-16, class:'label' }, '−'));
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 14, 'text-anchor':'middle', class:'val v' }, `${c.props.voltage} V`));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 10, 'text-anchor':'middle', class:'val v' }, `${c.props.voltage} V`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 6, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'switch') {
@@ -322,7 +322,7 @@ export function renderComponent(c) {
     if (c.props.closed) g.appendChild(svgEl('line', { class:'body', x1:-12, y1:0, x2:12, y2:0 }));
     else g.appendChild(svgEl('line', { class:'body', x1:-12, y1:0, x2:10, y2:-14 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 18, 'text-anchor':'middle', class:'val' }, c.props.closed ? 'closed' : 'open'));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 14, 'text-anchor':'middle', class:'val' }, c.props.closed ? 'closed' : 'open'));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 4, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'resistor') {
@@ -330,7 +330,7 @@ export function renderComponent(c) {
     g.appendChild(svgEl('rect', { class:'fill', x:-20, y:-10, width:40, height:20, rx:2 }));
     g.appendChild(svgEl('line', { class:'body', x1:20, y1:0, x2:40, y2:0 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 13, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 10, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 4, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'bulb') {
@@ -345,7 +345,7 @@ export function renderComponent(c) {
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:-9, x2:9, y2:9 }));
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:9, x2:9, y2:-9 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 16, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 10, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 8, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'ammeter' || c.type === 'voltmeter') {

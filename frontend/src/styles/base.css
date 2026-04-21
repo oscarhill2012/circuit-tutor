@@ -57,7 +57,7 @@ button { font-family: inherit; color: inherit; }
 .wire.preview { stroke: var(--accent); stroke-dasharray: 4 4; opacity: 0.8; }
 .wire.error { stroke: var(--danger); stroke-dasharray: 4 4; }
 .wire:hover { stroke: var(--info); cursor: pointer; }
-.comp text { font-family: 'JetBrains Mono', monospace; fill: var(--muted); font-size: 10px; }
+.comp text { font-family: 'JetBrains Mono', monospace; fill: var(--muted); font-size: 12px; }
 .comp .label { fill: var(--text); font-weight: 600; font-size: 11px; }
 .comp .val { fill: var(--accent-2); font-size: 10px; }
 .comp .val.v { fill: var(--q-v); }
