@@ -34,10 +34,16 @@ export function createWireInteractionController({ validator, onCommit, onChange,
     emit();
   }
 
+  function normalizePort(port) {
+    return port.junctionId
+      ? { junctionId: port.junctionId }
+      : { compId: port.compId, term: port.term };
+  }
+
   function startFrom(port, pt) {
     const v = validator.canStart(port);
     if (!v.ok) { onReject && onReject(port, v.reason); return; }
-    pending = { from: { compId: port.compId, term: port.term }, mouseX: pt.x, mouseY: pt.y };
+    pending = { from: normalizePort(port), mouseX: pt.x, mouseY: pt.y };
     invalidHover = null;
     status = WireState.AWAITING_TARGET;
     emit();
@@ -61,7 +67,7 @@ export function createWireInteractionController({ validator, onCommit, onChange,
       return;
     }
     const from = pending.from;
-    const committed = onCommit(from, { compId: port.compId, term: port.term });
+    const committed = onCommit(from, normalizePort(port));
     status = WireState.IDLE;
     pending = null;
     invalidHover = null;
