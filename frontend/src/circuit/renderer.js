@@ -353,7 +353,7 @@ export function renderComponent(c) {
     g.appendChild(svgEl('line', { class:'body', x1:-30, y1:0, x2:-14, y2:0 }));
     g.appendChild(svgEl('line', { class:'body', x1:14, y1:0, x2:30, y2:0 }));
     g.appendChild(svgEl('circle', { class:'fill', cx:0, cy:0, r:14 }));
-    g.appendChild(svgEl('text', { x:0, y:4, 'text-anchor':'middle', class:'label', 'font-size': 13 }, isA ? 'A' : 'V'));
+    g.appendChild(svgEl('text', { x:0, y:4, 'text-anchor':'middle', class:'label', 'font-size': 10 }, isA ? 'A' : 'V'));
 
     // Digital LCD-style readout sitting just above the meter (upright).
     let digits = '- - . - -';
