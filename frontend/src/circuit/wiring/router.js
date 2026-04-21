@@ -12,9 +12,9 @@ import { endpointPos, endpointDir, advance } from '../geometry.js';
 import { collectComponentBoxes, collectWireSegments } from './obstacles.js';
 
 // Tunables --------------------------------------------------------------
-const STUB = 100;         // length of mandatory source/target stub
+const STUB = 112;         // length of mandatory source/target stub
                            // (sized to fit a current-readout bar plus
-                           // breathing room: 12px gap + 58px bar + 30px tail)
+                           // breathing room: 24px gap + 64px bar + 24px tail)
 const BEND_COST = 22;     // penalty per 90° turn
 const CROSSING_COST = 220; // penalty per existing wire crossed — strongly discouraged
 const OVERLAP_COST = 240; // penalty per axis-aligned overlap with existing wire

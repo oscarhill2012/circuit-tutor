@@ -116,8 +116,9 @@ export function render() {
   for (let y = 0; y <= SVG_H; y += GRID_PX) grid.appendChild(svgEl('line', { class:'grid-line', x1:0, y1:y, x2:SVG_W, y2:y }));
   svg.appendChild(grid);
 
-  // Plan all current bars before drawing wires so we can trim the wire path
-  // back from each "barred" end and avoid wire underlapping the bar.
+  // Plan all current bars before drawing wires. The wires render at full
+  // length; each bar's opaque background covers the wire underneath so the
+  // bar appears to sit on top of a continuous wire (visible on both sides).
   const wireBars = planWireBars();
 
   // Render wires (before components so they are below)
@@ -131,10 +132,7 @@ export function render() {
     const pts = isLive ? null : resolveWirePath(w);
     const fullPts = isLive ? dragPreviewPts(w) : pts;
     if (!fullPts) continue;
-    const barEntry = isLive ? null : wireBars.get(w.id);
-    const drawPts = barEntry
-      ? trimPath(fullPts, trimDistance(barEntry.start), trimDistance(barEntry.end))
-      : fullPts;
+    const drawPts = fullPts;
     if (!drawPts || drawPts.length < 2) continue;
     let cls = 'wire';
     if (state.selectedId === 'wire:' + w.id) cls += ' selected';
@@ -313,7 +311,7 @@ export function renderComponent(c) {
     if (state.toggles.labels) {
       g.appendChild(svgEl('text', { x:-w/2+4, y:-16, class:'label' }, '+'));
       g.appendChild(svgEl('text', { x: w/2-10, y:-16, class:'label' }, '−'));
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 18, 'text-anchor':'middle', class:'val v' }, `${c.props.voltage} V`));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 14, 'text-anchor':'middle', class:'val v' }, `${c.props.voltage} V`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 6, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'switch') {
@@ -332,7 +330,7 @@ export function renderComponent(c) {
     g.appendChild(svgEl('rect', { class:'fill', x:-20, y:-10, width:40, height:20, rx:2 }));
     g.appendChild(svgEl('line', { class:'body', x1:20, y1:0, x2:40, y2:0 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 16, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 13, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 4, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'bulb') {
@@ -347,7 +345,7 @@ export function renderComponent(c) {
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:-9, x2:9, y2:9 }));
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:9, x2:9, y2:-9 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 20, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
+      g.appendChild(svgEl('text', { x:0, y: bh/2 + 16, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 8, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'ammeter' || c.type === 'voltmeter') {
@@ -396,8 +394,8 @@ export function renderComponent(c) {
     && state.sim && state.sim.ok && !state.sim.isShort
     && state.toggles.voltage && state.sim.supplyV > 0;
   if (showVBar) {
-    const barLen = 60, barT = 7;
-    const yBase = bh / 2 + 22;
+    const barLen = 64, barT = 7;
+    const yBase = bh / 2 + 14;
     const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
     g.appendChild(svgEl('rect', { class:'vbar-bg', x:-barLen/2, y: yBase, width: barLen, height: barT, rx:2 }));
     g.appendChild(svgEl('rect', { class:'vbar-fg', x:-barLen/2, y: yBase, width: barLen*vfrac, height: barT, rx:2 }));
@@ -464,10 +462,10 @@ function kclCurrentThroughWire(j, wire) {
 // ---------------------------------------------------------------------------
 
 const COMP_BAR_TYPES = new Set(['cell', 'battery', 'resistor', 'bulb']);
-const BAR_LEN = 58;          // length along the wire
-const BAR_T = 14;            // thickness perpendicular to the wire
-const TERMINAL_GAP = 12;     // breathing space between terminal and bar
-const POST_BAR_GAP = 4;      // tiny gap between bar end and wire resumption
+const BAR_LEN = 64;          // length along the wire (matches voltage bar)
+const BAR_T = 7;             // thickness perpendicular to the wire (matches voltage bar)
+const TERMINAL_GAP = 24;     // breathing space between terminal and bar
+const POST_BAR_GAP = 24;     // space between bar end and next 90° turn
 
 function planWireBars() {
   // Returns Map<wireId, { start?: barInfo, end?: barInfo }>
@@ -523,41 +521,6 @@ function planWireBars() {
   return bars;
 }
 
-// How many pixels of wire path to hide at this end (gap + bar + small tail
-// so the wire visibly "starts after" the bar).
-function trimDistance(barInfo) {
-  return barInfo ? TERMINAL_GAP + BAR_LEN + POST_BAR_GAP : 0;
-}
-
-function trimPath(pts, fromStart, fromEnd) {
-  if (!pts || pts.length < 2) return pts;
-  let arr = pts.map(p => ({ x: p.x, y: p.y }));
-  if (fromStart > 0) arr = trimOneEnd(arr, fromStart, true);
-  if (!arr || arr.length < 2) return null;
-  if (fromEnd > 0) arr = trimOneEnd(arr, fromEnd, false);
-  if (!arr || arr.length < 2) return null;
-  return arr;
-}
-
-function trimOneEnd(pts, dist, fromStart) {
-  let arr = fromStart ? pts.slice() : pts.slice().reverse();
-  let remaining = dist;
-  while (arr.length >= 2 && remaining > 0) {
-    const a = arr[0], b = arr[1];
-    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
-    if (segLen <= remaining) {
-      arr.shift();
-      remaining -= segLen;
-    } else {
-      const t = remaining / segLen;
-      arr[0] = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-      remaining = 0;
-    }
-  }
-  if (arr.length < 2) return null;
-  return fromStart ? arr : arr.reverse();
-}
-
 function renderWireBars(root, bars) {
   const g = svgEl('g', { class: 'wire-bars', 'pointer-events': 'none' });
   for (const w of state.wires) {
@@ -576,7 +539,7 @@ function drawWireBar(g, pts, atStart, info) {
   const b = atStart ? pts[1] : pts[pts.length - 2];
   const dx = b.x - a.x, dy = b.y - a.y;
   const segLen = Math.hypot(dx, dy);
-  if (segLen < TERMINAL_GAP + BAR_LEN) return; // first segment too short — bail
+  if (segLen < TERMINAL_GAP + BAR_LEN + POST_BAR_GAP) return; // first segment too short — bail
   const ux = dx / segLen, uy = dy / segLen;
 
   const bx0 = a.x + ux * TERMINAL_GAP;
