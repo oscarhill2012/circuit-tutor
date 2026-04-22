@@ -151,6 +151,53 @@ async function sendOneTutorRequest(combinedMessage) {
   }
 }
 
+// Scenario validation: ask Professor Volt to judge whether the current circuit
+// solves the given scenario. The tutor returns a structured `verdict` field
+// ("pass" | "fail") alongside the usual coaching reply. Runs out-of-band from
+// the normal chat queue so it doesn't get merged with debounced student turns.
+export async function askTutorCheckScenario(task) {
+  const message = `Please check my circuit — I believe I've solved the scenario: "${task.data.challenge}".`;
+  pushUserMsg(message);
+  const thinkingId = appendThinking();
+  try {
+    const payload = JSON.parse(buildUserPayload(message));
+    payload.check_request = {
+      type: 'scenario_validation',
+      challenge: task.data.challenge || '',
+      narrative: task.data.narrative || '',
+      parameters: task.data.parameters || {},
+      success_criteria: task.data.successCriteria || {},
+    };
+    const res = await fetch(TUTOR_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    removeThinking(thinkingId);
+    if (!res.ok) {
+      const reply = { reply_type: 'direct_explanation', assistant_text: `I couldn't reach the tutor service (${res.status}).` };
+      appendTutorMsg(reply);
+      return { verdict: 'fail', reply };
+    }
+    const data = await res.json();
+    const parsed = data.reply || { reply_type: 'direct_explanation', assistant_text: 'No reply.' };
+    state.lastAnalysis = data.analysis || null;
+    if (typeof parsed.rolling_summary === 'string' && parsed.rolling_summary.trim()) {
+      state.rollingSummary = parsed.rolling_summary.trim();
+    }
+    appendTutorMsg(parsed);
+    applyVisualInstructions(parsed.visual_instructions || []);
+    state.messages.push({ role: 'assistant', content: parsed });
+    const verdict = parsed.verdict === 'pass' ? 'pass' : 'fail';
+    return { verdict, reply: parsed };
+  } catch (err) {
+    removeThinking(thinkingId);
+    const reply = { reply_type: 'direct_explanation', assistant_text: `Network error: ${err.message}` };
+    appendTutorMsg(reply);
+    return { verdict: 'fail', reply };
+  }
+}
+
 export function askTutorAbout(prompt) {
   const input = document.getElementById('chat-input');
   input.value = prompt;

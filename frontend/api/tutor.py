@@ -114,12 +114,20 @@ Reply types:
 Visual instructions:
 Use only if they support the one teaching point. Prefer 1–3 items. Use `mark_error` for faults and `mark_success` for correct actions.
 
+Scenario validation mode:
+If the user payload contains a non-null `check_request` with `type == "scenario_validation"`, you are being asked to judge whether the student's current circuit actually solves the scenario described in `check_request` (use `challenge`, `narrative`, `parameters`, `success_criteria`, plus the server-authoritative `analysis` and `circuit_state`). In this mode:
+- Set `verdict` to exactly "pass" if the circuit correctly satisfies the scenario, or "fail" otherwise.
+- Be strict: only "pass" if the topology, component roles, meter placements, and any numeric targets in `success_criteria` or `parameters` all match within a reasonable tolerance.
+- Use the verdict language rules above ("Correct — well done." / "Not quite...") and point to the single most useful next fix if failing.
+- In all other (ordinary coaching) turns, set `verdict` to "".
+
 Return only valid JSON:
 {
   "reply_type": "socratic_hint | direct_explanation | check_work | quiz_prompt | refusal | correction",
   "teaching_move": "observe | compare | predict | calculate | correct | verify | none",
   "assistant_text": "string",
   "follow_up_question": "string",
+  "verdict": "pass | fail | \"\"",
   "visual_instructions": [{"target": "id", "action": "highlight|dim|glow|pulse|show_label|mark_error|mark_success", "label": "string"}],
   "safety": {"in_scope": true, "reason": "string"},
   "fact_checks": [{"claim": "string", "source_ids": ["kb.xxx"]}],
@@ -143,6 +151,7 @@ def _safe_fallback(reason):
         "reply_type": "direct_explanation",
         "assistant_text": "I hit a hiccup while thinking. Please try again in a moment.",
         "follow_up_question": "",
+        "verdict": "",
         "visual_instructions": [],
         "safety": {"in_scope": True, "reason": reason},
         "fact_checks": [],
@@ -216,6 +225,7 @@ def _build_user_payload(req, analysis):
         "analysis": analysis,
         "selected": req.get("selected"),
         "current_task": req.get("current_task"),
+        "check_request": req.get("check_request"),
         "recent_history": req.get("recent_history", []),
         "knowledge_snippets": req.get("knowledge_snippets", []),
         "rolling_summary": req.get("rolling_summary", ""),
@@ -285,6 +295,8 @@ def _call_openai(user_payload):
     parsed.setdefault("safety", {"in_scope": True, "reason": ""})
     parsed.setdefault("state_summary", {"current_goal": "", "observed_misconceptions": [], "next_step": ""})
     parsed.setdefault("rolling_summary", "")
+    if parsed.get("verdict") not in ("pass", "fail"):
+        parsed["verdict"] = ""
     return parsed
 
 

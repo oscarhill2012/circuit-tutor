@@ -14,7 +14,7 @@
 //     voltage and inferred R = V/I all matching expected values within tol.
 
 import { state } from '../state/store.js';
-import { askTutorAbout } from '../tutor/api.js';
+import { askTutorAbout, askTutorCheckScenario } from '../tutor/api.js';
 import { loadInitialCircuit, clearCircuit } from '../state/actions.js';
 import { appendTutorMsg, clearChat } from '../ui/tutorPanel.js';
 
@@ -329,7 +329,7 @@ export function renderTask() {
 
   if (t.type === 'measure') {
     card.innerHTML = `
-      <div class="pill">${t.topicName} \u00b7 ${t.difficulty} \u00b7 build &amp; measure</div>
+      <div class="pill">Build &amp; measure</div>
       <h4>${escapeHtml(t.data.brief)}</h4>
       <div class="criteria"><b>Pinned:</b> ${t.data.initial.components.map(c => c.id).join(', ')} \u00b7 <b>Read:</b> ${t.data.targetMeter}</div>
       <div class="row" style="align-items:center; gap:8px;">
@@ -383,7 +383,7 @@ export function renderTask() {
   } else if (t.type === 'problem') {
     const opts = shuffleSeed([t.data.correctAnswer, ...t.data.distractors], t.id);
     card.innerHTML = `
-      <div class="pill">${t.topicName} · ${t.difficulty}</div>
+      <div class="pill">Problem</div>
       <h4>${escapeHtml(t.data.question)}</h4>
       <div class="mc" id="mc-opts">
         ${opts.map((o) => `<button data-val="${o}">${o} ${t.data.unit}</button>`).join('')}
@@ -414,7 +414,7 @@ export function renderTask() {
       ? `<div class="criteria"><b>Pinned:</b> ${t.data.initial.components.map(c => c.id).join(', ')}</div>`
       : '';
     card.innerHTML = `
-      <div class="pill">${t.topicName} · ${t.difficulty} · scenario</div>
+      <div class="pill">Scenario</div>
       <h4>${escapeHtml(t.data.challenge)}</h4>
       <p style="color: var(--muted); font-size: 13px; margin: 6px 0;">${escapeHtml(t.data.narrative)}</p>
       <div class="criteria"><b>Given:</b> ${Object.entries(t.data.parameters || {}).map(([k,v]) => `${k}=${v}`).join(', ')}</div>
@@ -425,18 +425,30 @@ export function renderTask() {
       </div>
       <div class="feedback" id="feedback"></div>
     `;
-    document.getElementById('btn-check-scenario').onclick = () => {
-      const res = checkScenario(t);
+    document.getElementById('btn-check-scenario').onclick = async () => {
       const fb = document.getElementById('feedback');
-      fb.className = 'feedback show ' + (res.ok ? 'good' : 'bad');
-      fb.innerHTML = res.message;
-      if (res.ok) completeTask(t);
+      const btn = document.getElementById('btn-check-scenario');
+      btn.disabled = true;
+      fb.className = 'feedback show';
+      fb.textContent = 'Asking Professor Volt to review your circuit…';
+      try {
+        const { verdict, reply } = await askTutorCheckScenario(t);
+        const passed = verdict === 'pass';
+        fb.className = 'feedback show ' + (passed ? 'good' : 'bad');
+        const msg = reply && reply.assistant_text ? reply.assistant_text : '';
+        fb.innerHTML = passed
+          ? `<b>Approved by Professor Volt.</b> ${escapeHtml(msg)}`
+          : (msg ? escapeHtml(msg) : 'Not quite — check Professor Volt\'s reply in the chat.');
+        if (passed) completeTask(t);
+      } finally {
+        btn.disabled = false;
+      }
     };
     const rel = document.getElementById('btn-reload-scenario');
     if (rel) rel.onclick = () => loadInitialCircuit(t.data.initial, t.id);
   } else if (t.type === 'exploration') {
     card.innerHTML = `
-      <div class="pill">${t.topicName} · exploration</div>
+      <div class="pill">Exploration</div>
       <h4>${escapeHtml(t.data.concept)}</h4>
       <ol style="color: var(--muted); font-size: 13px; padding-left: 18px;">
         ${t.data.guidedQuestions.map(q => `<li style="margin-bottom:4px">${escapeHtml(q)}</li>`).join('')}
