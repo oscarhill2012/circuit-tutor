@@ -280,8 +280,10 @@ export function render() {
 
 export function renderComponent(c) {
   const isLocked = state.lockedIds && state.lockedIds.has(c.id);
+  const vis = state.visuals && state.visuals[c.id];
+  const visCls = vis ? ' tutor-' + vis.action : '';
   const g = svgEl('g', {
-    class: 'comp' + (state.selectedId === c.id ? ' selected' : '') + (isLocked ? ' locked' : ''),
+    class: 'comp' + (state.selectedId === c.id ? ' selected' : '') + (isLocked ? ' locked' : '') + visCls,
     transform: `translate(${c.x}, ${c.y})`,
     'data-cid': c.id,
     onpointerdown: (ev) => onCompMouseDown(ev, c),
@@ -407,6 +409,13 @@ export function renderComponent(c) {
     g.appendChild(svgEl('rect', { class:'vbar-fg', x:-barLen/2, y: yBase, width: barLen*vfrac, height: barT, rx:2 }));
     g.appendChild(svgEl('text', { x: -barLen/2 - 4, y: yBase + barT - 1, 'text-anchor':'end', class:'bar-label v' }, 'V'));
     g.appendChild(svgEl('text', { x: barLen/2 + 4, y: yBase + barT - 1, class:'bar-label v' }, `${Math.abs(simEl.drop).toFixed(2)}V`));
+  }
+
+  if (vis && vis.label) {
+    g.appendChild(svgEl('text', {
+      x: 0, y: -bh/2 - 22,
+      'text-anchor': 'middle', class: 'tutor-label',
+    }, vis.label.slice(0, 40)));
   }
 
   return g;
@@ -599,18 +608,54 @@ function drawWireBar(g, pts, atStart, info) {
   }
 }
 
+// Tutor-driven visual overlays. Instructions are stored in state.visuals so
+// they survive subsequent re-renders (hover, selection, sim ticks), and are
+// auto-cleared after a short window so the canvas stays calm.
+const VISUAL_TTL_MS = 6000;
+const ALLOWED_ACTIONS = new Set([
+  'highlight', 'dim', 'glow', 'pulse',
+  'show_label', 'mark_error', 'mark_success',
+]);
+let visualsCleanupTimer = null;
+
+function scheduleVisualsCleanup() {
+  if (visualsCleanupTimer) clearTimeout(visualsCleanupTimer);
+  let next = Infinity;
+  const now = Date.now();
+  for (const id in state.visuals) {
+    const v = state.visuals[id];
+    if (v.expiresAt < next) next = v.expiresAt;
+  }
+  if (next === Infinity) return;
+  visualsCleanupTimer = setTimeout(() => {
+    visualsCleanupTimer = null;
+    const t = Date.now();
+    let changed = false;
+    for (const id in state.visuals) {
+      if (state.visuals[id].expiresAt <= t) { delete state.visuals[id]; changed = true; }
+    }
+    if (changed) render();
+    if (Object.keys(state.visuals).length > 0) scheduleVisualsCleanup();
+  }, Math.max(50, next - now));
+}
+
 export function applyVisualInstructions(instrs) {
-  document.querySelectorAll('.comp').forEach(g => g.classList.remove('error','success'));
+  state.visuals = {};
+  const expiresAt = Date.now() + VISUAL_TTL_MS;
+  const validIds = new Set(state.components.map(c => c.id));
   for (const ins of instrs) {
     if (!ins || !ins.target) continue;
+    const action = ALLOWED_ACTIONS.has(ins.action) ? ins.action : 'highlight';
+    const label = typeof ins.label === 'string' ? ins.label : '';
     if (ins.target === 'whole_circuit') {
-      document.querySelectorAll('.comp').forEach(g => g.classList.add('success'));
-      setTimeout(() => document.querySelectorAll('.comp').forEach(g => g.classList.remove('success')), 2000);
+      for (const c of state.components) {
+        state.visuals[c.id] = { action, label: '', expiresAt };
+      }
       continue;
     }
-    const g = document.querySelector(`.comp[data-cid="${ins.target}"]`);
-    if (!g) continue;
-    if (ins.action === 'mark_error') g.classList.add('error');
-    else if (ins.action === 'mark_success' || ins.action === 'glow' || ins.action === 'pulse' || ins.action === 'highlight') g.classList.add('success');
+    if (!validIds.has(ins.target)) continue;
+    state.visuals[ins.target] = { action, label, expiresAt };
   }
+  render();
+  scheduleVisualsCleanup();
 }

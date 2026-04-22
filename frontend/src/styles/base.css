@@ -120,6 +120,36 @@ button { font-family: inherit; color: inherit; }
   fill: var(--text); font-size: 10px; font-family: 'JetBrains Mono', monospace;
 }
 
+/* Tutor-driven visual instructions. Kept subtle — a soft ring of colour and a
+   gentle pulse at most, nothing flashy. Auto-clears after ~6s. */
+@keyframes tutorPulse {
+  0%,100% { filter: drop-shadow(0 0 2px rgba(111,179,255,0.35)); }
+  50%     { filter: drop-shadow(0 0 8px rgba(111,179,255,0.75)); }
+}
+.comp.tutor-highlight .body,
+.comp.tutor-highlight .fill,
+.comp.tutor-show_label .body,
+.comp.tutor-show_label .fill { stroke: var(--info); }
+.comp.tutor-highlight { animation: tutorPulse 1.6s ease-in-out infinite; }
+.comp.tutor-glow .body,
+.comp.tutor-glow .fill { stroke: var(--accent-2); }
+.comp.tutor-glow { filter: drop-shadow(0 0 5px rgba(178,140,255,0.55)); }
+.comp.tutor-pulse .body,
+.comp.tutor-pulse .fill { stroke: var(--info); }
+.comp.tutor-pulse { animation: tutorPulse 1s ease-in-out infinite; }
+.comp.tutor-mark_success .body,
+.comp.tutor-mark_success .fill { stroke: var(--accent); }
+.comp.tutor-mark_success { filter: drop-shadow(0 0 6px rgba(45,226,179,0.45)); }
+.comp.tutor-mark_error .body,
+.comp.tutor-mark_error .fill { stroke: var(--danger); }
+.comp.tutor-mark_error { filter: drop-shadow(0 0 5px rgba(255,107,138,0.45)); }
+.comp.tutor-dim { opacity: 0.35; }
+.tutor-label {
+  fill: var(--info); font-size: 10px; font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 3;
+}
+
 /* Scrollbars */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
