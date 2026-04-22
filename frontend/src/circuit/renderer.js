@@ -139,7 +139,13 @@ export function render() {
     if (state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen && state.toggles.current) {
       const nodeA = state.sim.getNodeByEp ? state.sim.getNodeByEp(w.a) : state.sim.getNode(w.a.compId, w.a.term);
       const anyCurrent = state.sim.elements.some(e => (e.na===nodeA||e.nb===nodeA) && Math.abs(e.current) > 1e-4);
-      if (anyCurrent) cls += ' active';
+      if (anyCurrent) {
+        cls += ' active';
+        const nodeB = state.sim.getNodeByEp ? state.sim.getNodeByEp(w.b) : state.sim.getNode(w.b.compId, w.b.term);
+        const Va = state.sim.nodes && nodeA !== undefined ? state.sim.nodes[nodeA] : undefined;
+        const Vb = state.sim.nodes && nodeB !== undefined ? state.sim.nodes[nodeB] : undefined;
+        if (Va !== undefined && Vb !== undefined && Vb > Va) cls += ' reverse';
+      }
     }
     const wireGroup = svgEl('g', {
       class: 'wire-group',
@@ -173,7 +179,7 @@ export function render() {
     // Corner-connector dots appear while this wire is the hover target and
     // nothing else is pending. They live inside the wire's own group so the
     // hover state doesn't flicker as the cursor travels between wire and dot.
-    if (editor.hoveredWireId === w.id && !pendingNow && drawPts.length >= 3) {
+    if (editor.hoveredWireId === w.id && drawPts.length >= 3) {
       for (let i = 1; i < drawPts.length - 1; i++) {
         const cp = drawPts[i];
         wireGroup.appendChild(svgEl('circle', { class: 'wire-corner', cx: cp.x, cy: cp.y, r: 5 }));

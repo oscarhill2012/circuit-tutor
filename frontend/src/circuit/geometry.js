@@ -45,11 +45,16 @@ export function endpointDir(ep, other) {
     const assigned = assignJunctionDirs(ep.junctionId);
     const wid = findWireIdBetween(ep, other);
     if (wid && assigned.has(wid)) return assigned.get(wid);
+    // New wire not yet committed: pick the best direction among cardinals not
+    // already used by existing wires at this junction, so the new wire always
+    // leaves at 90° to its neighbours and its current bar has a clear stub.
+    const usedDirs = new Set(assigned.values());
     const here = endpointPos(ep);
     const there = endpointPos(other) || here;
     const dx = there.x - here.x, dy = there.y - here.y;
-    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'E' : 'W';
-    return dy >= 0 ? 'S' : 'N';
+    const ranked = rankCardinals(dx, dy);
+    const available = ranked.filter(d => !usedDirs.has(d));
+    return available.length ? available[0] : ranked[0];
   }
   const c = state.components.find(x => x.id === ep.compId);
   if (!c) return 'E';
