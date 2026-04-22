@@ -127,9 +127,7 @@ button { font-family: inherit; color: inherit; }
   50%     { filter: drop-shadow(0 0 8px rgba(111,179,255,0.75)); }
 }
 .comp.tutor-highlight .body,
-.comp.tutor-highlight .fill,
-.comp.tutor-show_label .body,
-.comp.tutor-show_label .fill { stroke: var(--info); }
+.comp.tutor-highlight .fill { stroke: var(--info); }
 .comp.tutor-highlight { animation: tutorPulse 1.6s ease-in-out infinite; }
 .comp.tutor-glow .body,
 .comp.tutor-glow .fill { stroke: var(--accent-2); }
@@ -144,11 +142,6 @@ button { font-family: inherit; color: inherit; }
 .comp.tutor-mark_error .fill { stroke: var(--danger); }
 .comp.tutor-mark_error { filter: drop-shadow(0 0 5px rgba(255,107,138,0.45)); }
 .comp.tutor-dim { opacity: 0.35; }
-.tutor-label {
-  fill: var(--info); font-size: 10px; font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
-  paint-order: stroke; stroke: var(--bg); stroke-width: 3;
-}
 
 /* Scrollbars */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

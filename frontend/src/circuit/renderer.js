@@ -411,13 +411,6 @@ export function renderComponent(c) {
     g.appendChild(svgEl('text', { x: barLen/2 + 4, y: yBase + barT - 1, class:'bar-label v' }, `${Math.abs(simEl.drop).toFixed(2)}V`));
   }
 
-  if (vis && vis.label) {
-    g.appendChild(svgEl('text', {
-      x: 0, y: -bh/2 - 22,
-      'text-anchor': 'middle', class: 'tutor-label',
-    }, vis.label.slice(0, 40)));
-  }
-
   return g;
 }
 
@@ -614,7 +607,7 @@ function drawWireBar(g, pts, atStart, info) {
 const VISUAL_TTL_MS = 6000;
 const ALLOWED_ACTIONS = new Set([
   'highlight', 'dim', 'glow', 'pulse',
-  'show_label', 'mark_error', 'mark_success',
+  'mark_error', 'mark_success',
 ]);
 let visualsCleanupTimer = null;
 
@@ -646,15 +639,14 @@ export function applyVisualInstructions(instrs) {
   for (const ins of instrs) {
     if (!ins || !ins.target) continue;
     const action = ALLOWED_ACTIONS.has(ins.action) ? ins.action : 'highlight';
-    const label = typeof ins.label === 'string' ? ins.label : '';
     if (ins.target === 'whole_circuit') {
       for (const c of state.components) {
-        state.visuals[c.id] = { action, label: '', expiresAt };
+        state.visuals[c.id] = { action, expiresAt };
       }
       continue;
     }
     if (!validIds.has(ins.target)) continue;
-    state.visuals[ins.target] = { action, label, expiresAt };
+    state.visuals[ins.target] = { action, expiresAt };
   }
   render();
   scheduleVisualsCleanup();

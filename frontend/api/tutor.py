@@ -150,7 +150,7 @@ Return only valid JSON:
   "assistant_text": "string",
   "follow_up_question": "string",
   "verdict": "pass | fail | \"\"",
-  "visual_instructions": [{"target": "id", "action": "highlight|dim|glow|pulse|show_label|mark_error|mark_success", "label": "string"}],
+  "visual_instructions": [{"target": "id", "action": "highlight|dim|glow|pulse|mark_error|mark_success"}],
   "safety": {"in_scope": true, "reason": "string"},
   "fact_checks": [{"claim": "string", "source_ids": ["kb.xxx"]}],
   "state_summary": {"current_goal": "string", "observed_misconceptions": ["string"], "next_step": "string"},
