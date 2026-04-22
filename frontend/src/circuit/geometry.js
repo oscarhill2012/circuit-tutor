@@ -72,9 +72,14 @@ function findWireIdBetween(ep, other) {
 }
 
 // For all wires at junction `jId`, assign each one a distinct cardinal
-// direction (N/E/S/W) based on the direction to its far endpoint. Wires
-// with the strongest directional preference are placed first; later wires
-// fall back to their next-best available cardinal. Returns Map<wireId, dir>.
+// direction (N/E/S/W). Assignments persist on the wire itself
+// (`w.junctionDirs[jId]`) so that once a wire owns a cardinal it keeps it
+// across subsequent routing passes — otherwise a drag that shifts geometry
+// could reshuffle which wire owns which side, invalidating every sibling's
+// cached path and forcing the router to take awful detours.
+//
+// New wires slot into whichever cardinals are still free, preferring the
+// direction that best points toward their far endpoint.
 function assignJunctionDirs(jId) {
   const out = new Map();
   const j = state.junctions.find(x => x.id === jId);
@@ -83,19 +88,33 @@ function assignJunctionDirs(jId) {
     w.a.junctionId === jId || w.b.junctionId === jId);
   if (!wires.length) return out;
 
-  const entries = wires.map(w => {
+  // Phase 1: honour persisted assignments. If two wires somehow both claim
+  // the same cardinal (shouldn't happen, but be defensive), the lower wire
+  // id wins and the other is reassigned in phase 2.
+  const used = new Set();
+  const needsAssign = [];
+  const sortedByIdAsc = [...wires].sort((a, b) => a.id < b.id ? -1 : 1);
+  for (const w of sortedByIdAsc) {
+    const cached = w.junctionDirs && w.junctionDirs[jId];
+    if (cached && !used.has(cached)) {
+      used.add(cached);
+      out.set(w.id, cached);
+    } else {
+      needsAssign.push(w);
+    }
+  }
+
+  // Phase 2: assign remaining wires. Sort by directional-preference
+  // strength (descending) so wires with the strongest pull on a given
+  // cardinal get first pick among the remaining slots.
+  const entries = needsAssign.map(w => {
     const far = (w.a.junctionId === jId) ? w.b : w.a;
     const p = endpointPos(far) || { x: j.x, y: j.y };
     const dx = p.x - j.x, dy = p.y - j.y;
-    // Strength = how pronounced the preferred cardinal is. Wires with
-    // strong preference get first pick.
-    const strength = Math.max(Math.abs(dx), Math.abs(dy));
-    return { wire: w, dx, dy, strength };
+    return { wire: w, dx, dy, strength: Math.max(Math.abs(dx), Math.abs(dy)) };
   });
-  // Tie-break by wire id for stable assignment across rerenders.
   entries.sort((a, b) => b.strength - a.strength || (a.wire.id < b.wire.id ? -1 : 1));
 
-  const used = new Set();
   const allDirs = ['E', 'W', 'S', 'N'];
   for (const e of entries) {
     const ranked = rankCardinals(e.dx, e.dy);
@@ -103,6 +122,8 @@ function assignJunctionDirs(jId) {
     if (!pick) pick = allDirs.find(d => !used.has(d)) || ranked[0];
     used.add(pick);
     out.set(e.wire.id, pick);
+    if (!e.wire.junctionDirs) e.wire.junctionDirs = {};
+    e.wire.junctionDirs[jId] = pick;
   }
   return out;
 }
