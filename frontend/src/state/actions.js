@@ -15,6 +15,15 @@ export function uid(type) {
 
 export function snap(v) { return Math.round(v / GRID) * GRID; }
 
+// From two orthogonal-grid points, return the cardinal direction from
+// `a` toward `b` ('E', 'W', 'N', 'S'). Used to seed wire junction
+// cardinals from path geometry.
+function cardinalFromTo(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'E' : 'W';
+  return dy >= 0 ? 'S' : 'N';
+}
+
 function snapshot() {
   return JSON.stringify({
     components: state.components,
@@ -153,8 +162,20 @@ export function splitWireAtCorner(wireId, pt, cornerIndex) {
   // Snap the shared vertex to the junction's grid-aligned point.
   left[left.length - 1] = { x: j.x, y: j.y };
   right[0] = { x: j.x, y: j.y };
-  const w1 = { id: 'W' + (state.nextId++), a: w.a, b: { junctionId: jid }, path: left };
-  const w2 = { id: 'W' + (state.nextId++), a: { junctionId: jid }, b: w.b, path: right };
+  // Seed junctionDirs from the sliced path so assignJunctionDirs honours
+  // the existing geometry instead of re-picking a cardinal that would
+  // leave the cached path's stub direction out of sync with the logical
+  // assignment.
+  const w1 = {
+    id: 'W' + (state.nextId++),
+    a: w.a, b: { junctionId: jid }, path: left,
+    junctionDirs: { [jid]: cardinalFromTo(left[left.length - 1], left[left.length - 2]) },
+  };
+  const w2 = {
+    id: 'W' + (state.nextId++),
+    a: { junctionId: jid }, b: w.b, path: right,
+    junctionDirs: { [jid]: cardinalFromTo(right[0], right[1]) },
+  };
   state.wires = state.wires.filter(x => x.id !== wireId).concat([w1, w2]);
   simulate(); render();
   return jid;

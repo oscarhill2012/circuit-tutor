@@ -31,17 +31,25 @@ const validator = createValidator(() => state);
 const controller = createWireInteractionController({
   validator,
   onCommit(from, to) {
-    const path = routePath(from, to, {
-      excludeComps: [from.compId, to.compId].filter(Boolean),
-    });
     pushHistory();
     const wire = {
       id: 'W' + (state.nextId++),
       a: from,
       b: to,
-      path: path && path.length >= 2 ? path : null,
+      path: null,
     };
     state.wires.push(wire);
+    // Route AFTER pushing so assignJunctionDirs sees the new wire and can
+    // lock in its junction cardinal (persisted on wire.junctionDirs). If
+    // we routed before push, the wire would go through the "new wire"
+    // branch of endpointDir, which picks a cardinal but never persists it
+    // — a later reroute could then choose a different cardinal, leaving
+    // the cached path's stub direction out of sync with the assignment.
+    const path = routePath(from, to, {
+      excludeComps: [from.compId, to.compId].filter(Boolean),
+      excludeWires: [wire.id],
+    });
+    if (path && path.length >= 2) wire.path = path;
     simulate();
     return wire.id;
   },
