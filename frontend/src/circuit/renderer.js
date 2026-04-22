@@ -79,10 +79,30 @@ function dragPreviewPts(w) {
 // editor after a drag finishes so only affected wires move.
 export function rerouteWiresFor(componentIds) {
   const touched = new Set(componentIds);
+  const toReroute = new Set();
+  const junctions = new Set();
   for (const w of state.wires) {
     const aHit = w.a.compId && touched.has(w.a.compId);
     const bHit = w.b.compId && touched.has(w.b.compId);
     if (!aHit && !bHit) continue;
+    toReroute.add(w.id);
+    if (w.a.junctionId) junctions.add(w.a.junctionId);
+    if (w.b.junctionId) junctions.add(w.b.junctionId);
+  }
+  // Junction stub directions are assigned jointly across all wires at a
+  // junction, so rerouting one wire can change the assignment for its
+  // siblings. Include every wire at any affected junction to keep their
+  // cached paths consistent with the fresh assignment.
+  if (junctions.size) {
+    for (const w of state.wires) {
+      if ((w.a.junctionId && junctions.has(w.a.junctionId))
+       || (w.b.junctionId && junctions.has(w.b.junctionId))) {
+        toReroute.add(w.id);
+      }
+    }
+  }
+  for (const w of state.wires) {
+    if (!toReroute.has(w.id)) continue;
     const next = routePath(w.a, w.b, {
       excludeComps: [w.a.compId, w.b.compId].filter(Boolean),
       excludeWires: [w.id],
@@ -125,10 +145,27 @@ export function render() {
   const wiresG = svgEl('g', { class: 'wires' });
   const draggingComp = editor.dragging ? editor.dragging.compId : null;
   const pendingNow = state.pendingWire;
+  // During a drag, identify which junctions have a wire touching the dragged
+  // component. All wires at those junctions must re-route live, otherwise
+  // siblings keep stale stub directions while the junction's joint cardinal
+  // assignment shifts (producing overlapping stubs at the current-bar spot).
+  const liveJunctions = new Set();
+  if (draggingComp) {
+    for (const w of state.wires) {
+      if (w.a.compId !== draggingComp && w.b.compId !== draggingComp) continue;
+      if (w.a.junctionId) liveJunctions.add(w.a.junctionId);
+      if (w.b.junctionId) liveJunctions.add(w.b.junctionId);
+    }
+  }
   for (const w of state.wires) {
     // During a drag, route the live wires without writing to w.path so a
     // single drop still gets a proper post-drag reroute.
-    const isLive = draggingComp && (w.a.compId === draggingComp || w.b.compId === draggingComp);
+    const touchesDraggedComp = draggingComp
+      && (w.a.compId === draggingComp || w.b.compId === draggingComp);
+    const touchesLiveJunction =
+      (w.a.junctionId && liveJunctions.has(w.a.junctionId))
+      || (w.b.junctionId && liveJunctions.has(w.b.junctionId));
+    const isLive = touchesDraggedComp || touchesLiveJunction;
     const pts = isLive ? null : resolveWirePath(w);
     const fullPts = isLive ? dragPreviewPts(w) : pts;
     if (!fullPts) continue;
