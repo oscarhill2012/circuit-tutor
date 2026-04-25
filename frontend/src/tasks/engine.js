@@ -354,7 +354,7 @@ export function renderTask() {
       }
       const sim = state.sim;
       const meter = state.components.find(c => c.id === t.data.targetMeter);
-      const simEl = sim && sim.ok && !sim.empty ? sim.elements.find(e => e.comp && e.comp.id === t.data.targetMeter) : null;
+      const simEl = sim && sim.ok && !sim.empty ? sim.elementByCompId.get(t.data.targetMeter) : null;
       if (!meter || !simEl) {
         fb.className = 'feedback show bad';
         fb.textContent = 'I can\u2019t see ' + t.data.targetMeter + ' in the circuit yet \u2014 add it or connect it.';

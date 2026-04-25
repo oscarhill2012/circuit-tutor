@@ -55,7 +55,7 @@ export function updateReadout() {
   if (!c) { hd.textContent = 'Select a component'; return; }
   hd.textContent = `${c.id} · ${c.type}`;
 
-  const el = s && s.ok ? s.elements.find(e => e.comp && e.comp.id === c.id) : null;
+  const el = s && s.ok ? s.elementByCompId.get(c.id) : null;
   const live = s && s.ok && !s.empty && !s.isShort;
   if (el && live) {
     vEl.textContent = Math.abs(el.drop).toFixed(2) + ' V';

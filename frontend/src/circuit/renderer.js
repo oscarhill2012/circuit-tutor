@@ -96,7 +96,7 @@ export function checkMeterPlacement(meter) {
   // Warn if ammeter has voltmeter placement (no current through it means maybe in parallel as bypass) —
   // Simplification: warn if ammeter current == 0 while circuit is live, or voltmeter has significant current.
   if (!state.sim || !state.sim.ok || state.sim.empty || state.sim.isOpen) return null;
-  const el = state.sim.elements.find(e => e.comp && e.comp.id === meter.id);
+  const el = state.sim.elementByCompId.get(meter.id);
   if (!el) return null;
   if (meter.type === 'ammeter' && Math.abs(el.current) < 1e-5) return 'warn';
   if (meter.type === 'voltmeter' && Math.abs(el.current) > 1e-3) return 'warn';
@@ -302,7 +302,7 @@ export function renderComponent(c) {
     rx: 10, ry: 10, fill: 'transparent', stroke: 'transparent'
   }));
 
-  const simEl = state.sim && state.sim.ok ? state.sim.elements.find(e => e.comp && e.comp.id === c.id) : null;
+  const simEl = state.sim && state.sim.ok ? state.sim.elementByCompId.get(c.id) : null;
 
   if (c.type === 'cell' || c.type === 'battery') {
     const w = c.type === 'battery' ? 80 : 60;
@@ -442,7 +442,7 @@ function kclCurrentThroughWire(j, wire) {
   }
   let sum = 0;
   for (const t of terminals) {
-    const el = state.sim.elements.find(e => e.comp && e.comp.id === t.compId);
+    const el = state.sim.elementByCompId.get(t.compId);
     if (!el) continue;
     const isPositiveTerm = (t.term === 'a' || t.term === '+');
     sum += (isPositiveTerm ? 1 : -1) * (el.current || 0);
@@ -509,7 +509,7 @@ function planWireBars() {
   //    if available, falling back to the other terminal.
   for (const c of state.components) {
     if (!COMP_BAR_TYPES.has(c.type)) continue;
-    const simEl = state.sim.elements.find(e => e.comp && e.comp.id === c.id);
+    const simEl = state.sim.elementByCompId.get(c.id);
     if (!simEl || Math.abs(simEl.current) < 1e-5) continue;
     // Sort terminals by x descending so the rightmost is tried first.
     const terms = [...COMP[c.type].terms].sort((a, b) => b.x - a.x);

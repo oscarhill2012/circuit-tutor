@@ -69,8 +69,14 @@
     const getNode = (cid, tn) => nodeOf[find(keyOf(cid, tn))];
     const getNodeByEp = (ep) => ep ? nodeOf[find(epKey(ep))] : undefined;
 
+    const buildIndex = (els) => {
+      const m = new Map();
+      for (const e of els) if (e.comp && e.comp.id) m.set(e.comp.id, e);
+      return m;
+    };
+
     const N = nodeKeys.length;
-    if (N === 0) return { ok: true, empty: true, nodes: [], elements: [] };
+    if (N === 0) return { ok: true, empty: true, nodes: [], elements: [], elementByCompId: new Map() };
 
     const elems = [];
     for (const c of comps) {
@@ -87,10 +93,12 @@
 
     const Vsrcs = elems.filter(e => e.kind === 'V');
     if (!Vsrcs.length) {
+      const elements = elems.map(e => ({ ...e, current: 0, drop: 0 }));
       return {
         ok: true, empty: false, noSource: true,
         nodes: new Array(N).fill(0),
-        elements: elems.map(e => ({ ...e, current: 0, drop: 0 })),
+        elements,
+        elementByCompId: buildIndex(elements),
         getNode, getNodeByEp,
       };
     }
@@ -123,10 +131,12 @@
 
     const x = gaussSolve(A, z);
     if (!x) {
+      const elements = elems.map(e => ({ ...e, current: 0, drop: 0 }));
       return {
         ok: false, error: 'Circuit is shorted or ill-defined',
         nodes: new Array(N).fill(0),
-        elements: elems.map(e => ({ ...e, current: 0, drop: 0 })),
+        elements,
+        elementByCompId: buildIndex(elements),
         getNode, getNodeByEp,
       };
     }
@@ -161,14 +171,16 @@
       const clamped = results.map(e => ({ ...e, current: 0, drop: 0 }));
       return {
         ok: true, empty: false, isShort: true, isOpen: false,
-        nodes: V, elements: clamped, getNode, getNodeByEp,
+        nodes: V, elements: clamped, elementByCompId: buildIndex(clamped),
+        getNode, getNodeByEp,
         supplyV: Vsrcs[0].value, totalI: 0,
       };
     }
 
     return {
       ok: true, empty: false,
-      nodes: V, elements: results, getNode, getNodeByEp,
+      nodes: V, elements: results, elementByCompId: buildIndex(results),
+      getNode, getNodeByEp,
       supplyV: Vsrcs[0].value, totalI: mainI, isOpen,
     };
   }
