@@ -15,6 +15,11 @@ that net has degree 2 in the active graph. The earlier component-as-node model
 collapsed a cell's + and - into one node, which made loop and topology
 detection unreliable.
 
+Topology classification uses a single biconnected-components (BCC) pass over
+the active graph so that `dead_branches`, `parallel_groups`, and ammeter
+in-parallel detection are linear in graph size rather than quadratic in the
+number of resistive elements.
+
 Input shape (frontend -> backend):
 
 {
@@ -119,7 +124,7 @@ def _build_nets(components, wires):
     return net_of
 
 
-def _contract(net_of, components, include_switches=True):
+def _contract(net_of, components, include_switches=True, contract_zero_r=True):
     """Contract zero-resistance elements (ammeters + optionally closed switches)."""
     uf = _UF()
     for n in set(net_of.values()):
@@ -129,7 +134,8 @@ def _contract(net_of, components, include_switches=True):
         if len(ts) != 2:
             continue
         if c["type"] in ZERO_R_TYPES:
-            uf.union(net_of[ts[0]], net_of[ts[1]])
+            if contract_zero_r:
+                uf.union(net_of[ts[0]], net_of[ts[1]])
         elif include_switches and c["type"] == "switch" and c.get("closed", True):
             uf.union(net_of[ts[0]], net_of[ts[1]])
     return {n: uf.find(n) for n in set(net_of.values())}
@@ -159,6 +165,129 @@ def _build_adj(edges):
         adj[a].append((b, eid))
         adj[b].append((a, eid))
     return adj
+
+
+def _bcc(adj):
+    """Iterative Tarjan biconnected-components / bridge finding.
+
+    Returns (bridges, block_id) where:
+      bridges: set of edge ids that are bridges in the undirected graph.
+      block_id: dict edge_id -> int, the BCC index. Each bridge is in its own
+                singleton block; non-bridge edges in the same BCC share a block.
+    Edges with a==b (self-loops) get their own singleton non-bridge block.
+    """
+    disc = {}
+    low = {}
+    bridges = set()
+    block_id = {}
+    edge_stack = []
+    timer = 0
+    next_block = 0
+
+    nodes = list(adj.keys())
+    for root in nodes:
+        if root in disc:
+            continue
+        disc[root] = low[root] = timer
+        timer += 1
+        # Each frame: (node, parent_edge_id, iterator over neighbours)
+        stack = [(root, None, iter(adj.get(root, [])))]
+        while stack:
+            u, pe, it = stack[-1]
+            advanced = False
+            for v, eid in it:
+                if eid == pe:
+                    continue
+                if v == u:
+                    # Self-loop: own singleton block, never a bridge.
+                    block_id[eid] = next_block
+                    next_block += 1
+                    continue
+                if v not in disc:
+                    edge_stack.append((u, v, eid))
+                    disc[v] = low[v] = timer
+                    timer += 1
+                    stack.append((v, eid, iter(adj.get(v, []))))
+                    advanced = True
+                    break
+                else:
+                    # Back-edge.
+                    if disc[v] < disc[u]:
+                        edge_stack.append((u, v, eid))
+                        if disc[v] < low[u]:
+                            low[u] = disc[v]
+            if advanced:
+                continue
+            u, pe_u, _ = stack.pop()
+            if stack:
+                parent = stack[-1][0]
+                if low[u] < low[parent]:
+                    low[parent] = low[u]
+                if low[u] >= disc[parent]:
+                    bid = next_block
+                    next_block += 1
+                    is_bridge = low[u] > disc[parent]
+                    while edge_stack:
+                        _, _, eid_e = edge_stack.pop()
+                        block_id[eid_e] = bid
+                        if eid_e == pe_u:
+                            if is_bridge:
+                                bridges.add(eid_e)
+                            break
+    return bridges, block_id
+
+
+def _block_path_blocks(block_id, adj, na, nb):
+    """Block-cut tree path from na to nb. Returns the set of block_ids on the
+    unique path between na and nb in the block-cut tree, or None if na and nb
+    are in different connected components."""
+    if na == nb:
+        return set()
+    block_nodes = defaultdict(set)
+    for u, neigh in adj.items():
+        for v, eid in neigh:
+            b = block_id.get(eid)
+            if b is None:
+                continue
+            block_nodes[b].add(u)
+            block_nodes[b].add(v)
+    node_blocks = defaultdict(set)
+    for b, ns in block_nodes.items():
+        for n in ns:
+            node_blocks[n].add(b)
+
+    if na not in node_blocks or nb not in node_blocks:
+        return None
+
+    # Block-cut tree: tagged nodes ('n', node_id) and ('b', block_id).
+    tree = defaultdict(list)
+    for n, bs in node_blocks.items():
+        for b in bs:
+            tree[('n', n)].append(('b', b))
+            tree[('b', b)].append(('n', n))
+
+    src, dst = ('n', na), ('n', nb)
+    parent = {src: None}
+    queue = [src]
+    head = 0
+    while head < len(queue):
+        u = queue[head]
+        head += 1
+        if u == dst:
+            break
+        for v in tree[u]:
+            if v not in parent:
+                parent[v] = u
+                queue.append(v)
+    if dst not in parent:
+        return None
+    blocks = set()
+    cur = dst
+    while cur is not None:
+        if cur[0] == 'b':
+            blocks.add(cur[1])
+        cur = parent[cur]
+    return blocks
 
 
 def analyse(state):
@@ -227,41 +356,34 @@ def analyse(state):
     # --- resistive-element classification ----------------------------------
     resistive_edges = [(eid, a, b, c) for eid, a, b, c in active_edges
                        if c["type"] in RESISTIVE_TYPES]
-    endpoints_of = {eid: frozenset((a, b)) for eid, a, b, _ in resistive_edges}
 
-    parallel_groups = []
-    grouped = set()
-    for i, (eid, a, b, _) in enumerate(resistive_edges):
-        if eid in grouped or a == b:
+    # Parallel groups in O(R) via endpoint-set buckets.
+    buckets = defaultdict(list)
+    bucket_order = []
+    for eid, a, b, _ in resistive_edges:
+        if a == b:
             continue
-        group = [eid]
-        for eid2, a2, b2, _ in resistive_edges[i + 1:]:
-            if eid2 in grouped:
-                continue
-            if endpoints_of[eid2] == endpoints_of[eid]:
-                group.append(eid2)
-        if len(group) > 1:
-            parallel_groups.append(group)
-            grouped.update(group)
+        key = frozenset((a, b))
+        if key not in buckets:
+            bucket_order.append(key)
+        buckets[key].append(eid)
+    parallel_groups = [buckets[k] for k in bucket_order if len(buckets[k]) > 1]
 
-    # --- dead branches: resistive element not on any cell loop -------------
+    # --- dead branches via block-cut tree ----------------------------------
     dead_branches = []
-    if cells and not short_circuit and complete_loop:
+    if cells and complete_loop and not short_circuit:
         cell = cells[0]
-        ts = _terminals_of(cell)
-        na, nb = cnet(ts[0]), cnet(ts[1])
-        for eid, a, b, _ in resistive_edges:
-            # On a cell loop iff there is a path na -> a -> b -> nb (or reverse)
-            # using active edges other than this one.
-            on_loop = (
-                (_path_exists(adj, na, a, blocked_edge_id=eid)
-                 and _path_exists(adj, b, nb, blocked_edge_id=eid))
-                or
-                (_path_exists(adj, na, b, blocked_edge_id=eid)
-                 and _path_exists(adj, a, nb, blocked_edge_id=eid))
-            )
-            if not on_loop:
-                dead_branches.append(eid)
+        cts = _terminals_of(cell)
+        na, nb = cnet(cts[0]), cnet(cts[1])
+        _, block_id_full = _bcc(adj)
+        live_blocks = _block_path_blocks(block_id_full, adj, na, nb)
+        if live_blocks is None:
+            dead_branches = [eid for eid, _, _, _ in resistive_edges]
+        else:
+            dead_branches = [
+                eid for eid, a, b, _ in resistive_edges
+                if a == b or block_id_full.get(eid) not in live_blocks
+            ]
     elif not complete_loop:
         # With no complete loop, every resistive element is "dead" for tutor purposes.
         dead_branches = [eid for eid, _, _, _ in resistive_edges]
@@ -286,15 +408,37 @@ def analyse(state):
     else:
         topology = "series"
 
-    # --- meter checks (based on actual wiring, not self-declared mode) -----
+    # --- meter checks ------------------------------------------------------
     meter_issues = []
-    # Build a no-meter adjacency for bridge tests.
-    nonmeter_adj = defaultdict(list)
-    for eid, a, b, c in active_edges:
-        if c["type"] in ZERO_R_TYPES:
-            continue  # ammeters already contracted out
-        nonmeter_adj[a].append((b, eid))
-        nonmeter_adj[b].append((a, eid))
+
+    # Bridge-probe graph: ammeters as 0-R edges, closed switches contracted,
+    # voltmeters and open switches excluded, the primary cell excluded so its
+    # edge cannot trivially close every loop. One BCC pass classifies every
+    # ammeter as bridge (series) or non-bridge (in-parallel).
+    g2_bridges = set()
+    g2_eids = set()
+    if ammeters:
+        contract_noamm = _contract(net_of, components,
+                                   include_switches=True,
+                                   contract_zero_r=False)
+        cell0_id = cells[0]["id"] if cells else None
+        g2_edges = []
+        for c in components:
+            ts = _terminals_of(c)
+            if len(ts) != 2:
+                continue
+            if c["type"] == "voltmeter":
+                continue
+            if c["type"] == "switch" and not c.get("closed", True):
+                continue
+            if c["id"] == cell0_id:
+                continue
+            a = contract_noamm[net_of[ts[0]]]
+            b = contract_noamm[net_of[ts[1]]]
+            g2_edges.append((c["id"], a, b))
+            g2_eids.add(c["id"])
+        g2_adj = _build_adj(g2_edges)
+        g2_bridges, _ = _bcc(g2_adj)
 
     for m in meters:
         mid = m.get("id")
@@ -313,32 +457,9 @@ def analyse(state):
                     "misconception_id": "kb.misconception.ammeter_in_parallel",
                 })
                 continue
-            # If, after treating *this* ammeter as open, the two raw nets are
-            # still connected through the rest of the active circuit, the
-            # ammeter is wired in parallel with something (it would short it).
-            probe_contract = _contract(net_of, [c for c in components if c["id"] != mid],
-                                       include_switches=True)
-            probe_edges = []
-            for c in components:
-                if c["id"] == mid:
-                    continue
-                t2 = _terminals_of(c)
-                if len(t2) != 2 or c["type"] == "voltmeter":
-                    continue
-                if c["type"] in ZERO_R_TYPES:
-                    continue
-                if c["type"] == "switch" and not c.get("closed", True):
-                    continue
-                probe_edges.append((c["id"],
-                                    probe_contract[net_of[t2[0]]],
-                                    probe_contract[net_of[t2[1]]]))
-            probe_adj = _build_adj(probe_edges)
-            pa = probe_contract[raw_a]
-            pb = probe_contract[raw_b]
-            cell_id = cells[0]["id"] if cells else None
-            # Block the cell edge: we're asking whether the external circuit
-            # (not the cell itself) still bridges the ammeter's two terminals.
-            if _path_exists(probe_adj, pa, pb, blocked_edge_id=cell_id):
+            # In-parallel iff this ammeter's edge is not a bridge in the
+            # active graph with the primary cell removed.
+            if mid in g2_eids and mid not in g2_bridges:
                 meter_issues.append({
                     "meter": mid,
                     "issue": "ammeter_in_parallel",
@@ -357,9 +478,6 @@ def analyse(state):
             # A well-placed voltmeter spans two distinct nets that both lie on
             # an active path through the cell (i.e. across a real element).
             if cells:
-                cell = cells[0]
-                cts = _terminals_of(cell)
-                na, nb = cnet(cts[0]), cnet(cts[1])
                 ca, cb = contract[raw_a], contract[raw_b]
                 if ca == cb:
                     # Contraction merged them -> voltmeter across a zero-R path
