@@ -1,23 +1,14 @@
 // Connection validation rules.
 // Kept framework-agnostic: pass in the state object, get pure verdicts.
 
+import { endpointKey, samePort } from '../geometry.js';
+
 /**
  * @typedef {{ok:boolean, reason?:string}} Verdict
  */
 
 export function createValidator(getState) {
   const state = () => (typeof getState === 'function' ? getState() : getState);
-
-  function epId(ep) {
-    if (!ep) return null;
-    if (ep.junctionId) return 'J:' + ep.junctionId;
-    if (ep.compId && ep.term) return ep.compId + '.' + ep.term;
-    return null;
-  }
-
-  function epMatches(a, b) {
-    return a && b && epId(a) && epId(a) === epId(b);
-  }
 
   /** @returns {Verdict} */
   function canStart(port) {
@@ -36,12 +27,13 @@ export function createValidator(getState) {
   /** @returns {Verdict} */
   function canConnect(from, to) {
     if (!from || !to) return { ok: false, reason: 'invalid-port' };
-    if (epMatches(from, to)) return { ok: false, reason: 'same-terminal' };
-    const wires = state().wires;
-    const dup = wires.find(w =>
-      (epMatches(w.a, from) && epMatches(w.b, to)) ||
-      (epMatches(w.b, from) && epMatches(w.a, to))
-    );
+    if (samePort(from, to)) return { ok: false, reason: 'same-terminal' };
+    const fk = endpointKey(from), tk = endpointKey(to);
+    if (!fk || !tk) return { ok: false, reason: 'invalid-port' };
+    const dup = state().wires.find(w => {
+      const ak = endpointKey(w.a), bk = endpointKey(w.b);
+      return (ak === fk && bk === tk) || (ak === tk && bk === fk);
+    });
     if (dup) return { ok: false, reason: 'duplicate' };
     return { ok: true };
   }

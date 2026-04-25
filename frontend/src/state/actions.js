@@ -115,7 +115,7 @@ export function loadInitialCircuit(initial, taskId) {
     x: snap(c.x), y: snap(c.y),
     props: { ...(COMP[c.type].defaultProps || {}), ...(c.props || {}) },
   }));
-  state.wires = (initial.wires || []).map(w => ({ ...w, via: w.via || [] }));
+  state.wires = (initial.wires || []).map(w => ({ ...w }));
   state.junctions = (initial.junctions || []).map(j => ({ ...j }));
   state.selectedId = null;
   state.lockedIds = new Set(initial.locked || []);

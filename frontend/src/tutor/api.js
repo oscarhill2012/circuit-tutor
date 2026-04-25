@@ -78,7 +78,7 @@ function buildUserPayload(studentMessage) {
   });
   const knowledge_snippets = [...PINNED, ...retrieved];
 
-  return JSON.stringify({
+  return {
     student_message: studentMessage,
     circuit_state: circuitSnapshot(),
     selected: state.selectedId,
@@ -86,7 +86,7 @@ function buildUserPayload(studentMessage) {
     recent_history: recent,
     knowledge_snippets,
     rolling_summary: state.rollingSummary || '',
-  });
+  };
 }
 
 // Repeated-message batching: if the student fires off several messages in
@@ -128,7 +128,7 @@ async function sendOneTutorRequest(combinedMessage) {
     const res = await fetch(TUTOR_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: buildUserPayload(combinedMessage),
+      body: JSON.stringify(buildUserPayload(combinedMessage)),
     });
     if (!res.ok) {
       removeThinking(thinkingId);
@@ -160,7 +160,7 @@ export async function askTutorCheckScenario(task) {
   pushUserMsg(message);
   const thinkingId = appendThinking();
   try {
-    const payload = JSON.parse(buildUserPayload(message));
+    const payload = buildUserPayload(message);
     payload.check_request = {
       type: 'scenario_validation',
       challenge: task.data.challenge || '',

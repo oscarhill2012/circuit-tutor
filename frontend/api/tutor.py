@@ -218,22 +218,31 @@ def _apply_budget(req):
     pinned = [s for s in snippets if isinstance(s, dict) and s.get("id") in pinned_ids]
     retrievable = [s for s in snippets if not (isinstance(s, dict) and s.get("id") in pinned_ids)]
 
-    def size():
-        return len(json.dumps({
-            "student_message": req.get("student_message", ""),
-            "circuit_state": req.get("circuit_state", {}),
-            "current_task": req.get("current_task"),
-            "recent_history": history,
-            "knowledge_snippets": pinned + retrievable,
-            "rolling_summary": req.get("rolling_summary", ""),
-        }, ensure_ascii=False))
+    # Static-part size is fixed across the loop; only the dynamic lists shrink.
+    # Measure each item once and subtract from a running total so trimming is
+    # O(n) instead of O(n²) re-serialisations.
+    def jsize(obj):
+        return len(json.dumps(obj, ensure_ascii=False))
+
+    static_size = jsize({
+        "student_message": req.get("student_message", ""),
+        "circuit_state": req.get("circuit_state", {}),
+        "current_task": req.get("current_task"),
+        "rolling_summary": req.get("rolling_summary", ""),
+    })
+    pinned_size = sum(jsize(s) for s in pinned)
+    retrievable_sizes = [jsize(s) for s in retrievable]
+    history_sizes = [jsize(h) for h in history]
+    total = static_size + pinned_size + sum(retrievable_sizes) + sum(history_sizes)
 
     trimmed_note = None
-    while size() > _PAYLOAD_CHAR_BUDGET and retrievable:
+    while total > _PAYLOAD_CHAR_BUDGET and retrievable:
         retrievable.pop()
+        total -= retrievable_sizes.pop()
         trimmed_note = "trimmed_retrieved"
-    while size() > _PAYLOAD_CHAR_BUDGET and len(history) > 1:
+    while total > _PAYLOAD_CHAR_BUDGET and len(history) > 1:
         history.pop(0)
+        total -= history_sizes.pop(0)
         trimmed_note = "trimmed_history"
 
     req["knowledge_snippets"] = pinned + retrievable

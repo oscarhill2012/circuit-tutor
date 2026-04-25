@@ -35,7 +35,6 @@ export function wirePoints(w) {
     pts[0] = p0; pts[pts.length - 1] = pn;
     return pts;
   }
-  if (w.via && w.via.length) return [p0, ...w.via, pn];
   return [p0, pn];
 }
 
