@@ -14,6 +14,46 @@ import { toSvgPath, previewPath } from './wiring/path.js';
 export const svg = document.getElementById('canvas');
 const SVGNS = 'http://www.w3.org/2000/svg';
 
+// Stable layer groups built once by initRenderer(). render() refills the
+// dynamic layers each pass; the grid is built once and never touched again.
+let layersInited = false;
+let gridG = null;
+let wiresG = null;
+let compsG = null;
+let termsG = null;
+let previewG = null;
+let wireBarsG = null;
+
+function clearChildren(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+export function initRenderer() {
+  if (layersInited) return;
+  svg.setAttribute('viewBox', `0 0 ${SVG_W} ${SVG_H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  gridG = svgEl('g', { class: 'grid' });
+  const GRID_PX = 20;
+  for (let x = 0; x <= SVG_W; x += GRID_PX) gridG.appendChild(svgEl('line', { class:'grid-line', x1:x, y1:0, x2:x, y2:SVG_H }));
+  for (let y = 0; y <= SVG_H; y += GRID_PX) gridG.appendChild(svgEl('line', { class:'grid-line', x1:0, y1:y, x2:SVG_W, y2:y }));
+  svg.appendChild(gridG);
+
+  wiresG = svgEl('g', { class: 'wires' });
+  svg.appendChild(wiresG);
+  compsG = svgEl('g', { class: 'comps' });
+  svg.appendChild(compsG);
+  termsG = svgEl('g', { class: 'terms' });
+  svg.appendChild(termsG);
+  previewG = svgEl('g', { class: 'preview' });
+  svg.appendChild(previewG);
+  wireBarsG = svgEl('g', { class: 'wire-bars', 'pointer-events': 'none' });
+  svg.appendChild(wireBarsG);
+
+  layersInited = true;
+}
+
 export function svgEl(tag, attrs, ...children) {
   const e = document.createElementNS(SVGNS, tag);
   for (const k in attrs) {
@@ -104,17 +144,12 @@ export function checkMeterPlacement(meter) {
 }
 
 export function render() {
-  // Set viewbox
-  svg.setAttribute('viewBox', `0 0 ${SVG_W} ${SVG_H}`);
-  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-  // Grid
-  const grid = svgEl('g', { class: 'grid' });
-  const GRID_PX = 20;
-  for (let x = 0; x <= SVG_W; x += GRID_PX) grid.appendChild(svgEl('line', { class:'grid-line', x1:x, y1:0, x2:x, y2:SVG_H }));
-  for (let y = 0; y <= SVG_H; y += GRID_PX) grid.appendChild(svgEl('line', { class:'grid-line', x1:0, y1:y, x2:SVG_W, y2:y }));
-  svg.appendChild(grid);
+  if (!layersInited) initRenderer();
+  clearChildren(wiresG);
+  clearChildren(compsG);
+  clearChildren(termsG);
+  clearChildren(previewG);
+  clearChildren(wireBarsG);
 
   // Plan all current bars before drawing wires. The wires render at full
   // length; each bar's opaque background covers the wire underneath so the
@@ -122,7 +157,6 @@ export function render() {
   const wireBars = planWireBars();
 
   // Render wires (before components so they are below)
-  const wiresG = svgEl('g', { class: 'wires' });
   const draggingComp = editor.dragging ? editor.dragging.compId : null;
   const pendingNow = state.pendingWire;
   for (const w of state.wires) {
@@ -150,12 +184,8 @@ export function render() {
     const wireGroup = svgEl('g', {
       class: 'wire-group',
       'data-wid': w.id,
-      onpointerenter: () => {
-        if (editor.hoveredWireId !== w.id) { editor.hoveredWireId = w.id; render(); }
-      },
-      onpointerleave: () => {
-        if (editor.hoveredWireId === w.id) { editor.hoveredWireId = null; render(); }
-      },
+      onpointerenter: () => setHoveredWire(w.id),
+      onpointerleave: () => { if (editor.hoveredWireId === w.id) setHoveredWire(null); },
     });
     wireGroup.appendChild(svgEl('path', {
       class: cls, d: toSvgPath(drawPts),
@@ -163,9 +193,7 @@ export function render() {
       onclick: (ev) => {
         ev.stopPropagation();
         if (state.tool === 'delete') { deleteWire(w.id); return; }
-        state.selectedId = 'wire:' + w.id;
-        render();
-        updateReadout();
+        setSelectedId('wire:' + w.id);
       },
     }));
     wireGroup.appendChild(svgEl('path', {
@@ -197,15 +225,11 @@ export function render() {
     }
     wiresG.appendChild(wireGroup);
   }
-  svg.appendChild(wiresG);
 
   // Render components
-  const compsG = svgEl('g', { class: 'comps' });
   for (const c of state.components) compsG.appendChild(renderComponent(c));
-  svg.appendChild(compsG);
 
   // Terminal hit areas with explicit connector visual states.
-  const termG = svgEl('g', { class: 'terms' });
   const pending = state.pendingWire;
   const invalid = editor.invalidHoverKey;
   for (const c of state.components) {
@@ -221,8 +245,8 @@ export function render() {
       else if (isInvalid) cls += ' invalid';
       else if (isHovered) cls += ' hover';
       else if (isValidTarget) cls += ' valid';
-      termG.appendChild(svgEl('circle', { class: cls, cx: p.x, cy: p.y, r: 4 }));
-      termG.appendChild(svgEl('circle', {
+      termsG.appendChild(svgEl('circle', { class: cls, cx: p.x, cy: p.y, r: 4 }));
+      termsG.appendChild(svgEl('circle', {
         class: 'terminal hit', cx: p.x, cy: p.y, r: 16,
         'data-term': k,
         'data-comp': c.id,
@@ -246,16 +270,14 @@ export function render() {
     else if (isInvalid) cls += ' invalid';
     else if (isHovered) cls += ' hover';
     else if (isValidTarget) cls += ' valid';
-    termG.appendChild(svgEl('circle', { class: cls, cx: j.x, cy: j.y, r: 4.5 }));
-    termG.appendChild(svgEl('circle', {
+    termsG.appendChild(svgEl('circle', { class: cls, cx: j.x, cy: j.y, r: 4.5 }));
+    termsG.appendChild(svgEl('circle', {
       class: 'terminal hit', cx: j.x, cy: j.y, r: 14,
       'data-term': k,
       'data-junction': j.id,
       onpointerdown: (ev) => { ev.stopPropagation(); onTerminalPointerDown(ev, null, null, j.id); },
     }));
   }
-
-  svg.appendChild(termG);
 
   // Preview wire
   editor.previewEl = null;
@@ -267,12 +289,12 @@ export function render() {
         class: 'wire preview', d: previewPath(p1, p2),
         'pointer-events': 'none',
       });
-      svg.appendChild(editor.previewEl);
+      previewG.appendChild(editor.previewEl);
     }
   }
 
   // Current bars overlaid on each wire (component bars + KCL junction bars).
-  renderWireBars(svg, wireBars);
+  renderWireBars(wireBars);
 
   updateHUD();
   updateReadout();
@@ -290,7 +312,7 @@ export function renderComponent(c) {
     onclick: (ev) => {
       ev.stopPropagation();
       if (state.tool === 'delete') { deleteComponent(c.id); return; }
-      state.selectedId = c.id; render(); updateReadout();
+      setSelectedId(c.id);
     },
   });
 
@@ -529,17 +551,15 @@ function planWireBars() {
   return bars;
 }
 
-function renderWireBars(root, bars) {
-  const g = svgEl('g', { class: 'wire-bars', 'pointer-events': 'none' });
+function renderWireBars(bars) {
   for (const w of state.wires) {
     const entry = bars.get(w.id);
     if (!entry) continue;
     const pts = resolveWirePath(w);
     if (!pts || pts.length < 2) continue;
-    if (entry.start) drawWireBar(g, pts, true, entry.start);
-    if (entry.end) drawWireBar(g, pts, false, entry.end);
+    if (entry.start) drawWireBar(wireBarsG, pts, true, entry.start);
+    if (entry.end) drawWireBar(wireBarsG, pts, false, entry.end);
   }
-  root.appendChild(g);
 }
 
 function drawWireBar(g, pts, atStart, info) {
@@ -630,6 +650,78 @@ function scheduleVisualsCleanup() {
     if (changed) render();
     if (Object.keys(state.visuals).length > 0) scheduleVisualsCleanup();
   }, Math.max(50, next - now));
+}
+
+// Hover and selection toggles: mutate classes on existing nodes instead of
+// rebuilding the entire SVG. Falls back to a no-op when the target node has
+// not been rendered yet (the next render() will pick the state up via
+// editor.hoveredWireId / state.selectedId).
+
+export function setHoveredWire(id) {
+  if (editor.hoveredWireId === id) return;
+  const prev = editor.hoveredWireId;
+  editor.hoveredWireId = id;
+  if (prev) clearWireHoverDots(prev);
+  if (id) drawWireHoverDots(id);
+}
+
+function clearWireHoverDots(wireId) {
+  if (!wiresG) return;
+  const g = wiresG.querySelector(`g.wire-group[data-wid="${wireId}"]`);
+  if (!g) return;
+  g.querySelectorAll('.wire-corner, .wire-corner-hit').forEach(n => n.remove());
+}
+
+function drawWireHoverDots(wireId) {
+  if (!wiresG) return;
+  const g = wiresG.querySelector(`g.wire-group[data-wid="${wireId}"]`);
+  if (!g) return;
+  const wire = state.wires.find(w => w.id === wireId);
+  if (!wire) return;
+  const pts = resolveWirePath(wire);
+  if (!pts || pts.length < 3) return;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const cp = pts[i];
+    g.appendChild(svgEl('circle', { class: 'wire-corner', cx: cp.x, cy: cp.y, r: 5 }));
+    g.appendChild(svgEl('circle', {
+      class: 'terminal hit wire-corner-hit',
+      cx: cp.x, cy: cp.y, r: 14,
+      'data-wire-corner': wire.id + ':' + i,
+      onpointerdown: (ev) => {
+        ev.stopPropagation();
+        const jid = splitWireAtCorner(wire.id, { x: cp.x, y: cp.y }, i);
+        if (jid) onTerminalPointerDown(ev, null, null, jid);
+      },
+    }));
+  }
+}
+
+export function setSelectedId(id) {
+  if (state.selectedId === id) {
+    updateReadout();
+    return;
+  }
+  state.selectedId = id;
+  applySelectionClasses();
+  updateReadout();
+}
+
+function applySelectionClasses() {
+  if (wiresG) {
+    wiresG.querySelectorAll('path.wire.selected').forEach(n => n.classList.remove('selected'));
+    if (state.selectedId && typeof state.selectedId === 'string' && state.selectedId.startsWith('wire:')) {
+      const wid = state.selectedId.slice(5);
+      const path = wiresG.querySelector(`g.wire-group[data-wid="${wid}"] path.wire`);
+      if (path) path.classList.add('selected');
+    }
+  }
+  if (compsG) {
+    compsG.querySelectorAll('g.comp.selected').forEach(n => n.classList.remove('selected'));
+    if (state.selectedId && !(typeof state.selectedId === 'string' && state.selectedId.startsWith('wire:'))) {
+      const g = compsG.querySelector(`g.comp[data-cid="${state.selectedId}"]`);
+      if (g) g.classList.add('selected');
+    }
+  }
 }
 
 export function applyVisualInstructions(instrs) {

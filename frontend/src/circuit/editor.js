@@ -10,11 +10,10 @@
 
 import { state } from '../state/store.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
-import { render, svg, rerouteWiresFor, keyOfTerm } from './renderer.js';
+import { render, svg, rerouteWiresFor, keyOfTerm, setSelectedId } from './renderer.js';
 import { termPos, endpointPos, endpointKey } from './geometry.js';
 import { route as routePath, segCross } from './wiring/router.js';
 import { previewPath } from './wiring/path.js';
-import { updateReadout } from '../ui/canvas.js';
 import { createValidator } from './wiring/validation.js';
 import { createWireInteractionController } from './wiring/controller.js';
 
@@ -145,8 +144,7 @@ export function onCompMouseDown(ev, c) {
     compId: c.id, offsetX: p.x - c.x, offsetY: p.y - c.y,
     moved: false, started: JSON.stringify(c),
   };
-  state.selectedId = c.id;
-  render();
+  setSelectedId(c.id);
 }
 
 export function onTerminalPointerDown(ev, compId, term, junctionId) {
@@ -251,9 +249,7 @@ export function initCanvasInteractions() {
         editor.hoveredTerm = null;
         return;
       }
-      state.selectedId = null;
-      render();
-      updateReadout();
+      setSelectedId(null);
     }
   });
 

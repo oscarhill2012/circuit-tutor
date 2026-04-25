@@ -4,7 +4,7 @@
 
 import { state } from './state/store.js';
 import { simulate } from './state/actions.js';
-import { render } from './circuit/renderer.js';
+import { render, initRenderer } from './circuit/renderer.js';
 import { initCanvasInteractions } from './circuit/editor.js';
 import { initPalette } from './ui/palette.js';
 import { initTools, initKeyboard, updateReadout } from './ui/canvas.js';
@@ -14,6 +14,7 @@ import { initTutorPanel } from './ui/tutorPanel.js';
 export { state };
 
 export async function boot() {
+  initRenderer();
   initPalette();
   initTools();
   initKeyboard();
