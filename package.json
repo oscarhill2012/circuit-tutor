@@ -1,0 +1,25 @@
+{
+  "name": "circuit-tutor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test:probes": "playwright test tests/tutor-probes --project=chromium"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oscarhill2012/circuit-tutor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/oscarhill2012/circuit-tutor/issues"
+  },
+  "homepage": "https://github.com/oscarhill2012/circuit-tutor#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^25.6.0"
+  }
+}
