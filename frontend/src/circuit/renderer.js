@@ -28,6 +28,42 @@ function clearChildren(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
+// Diff `parent`'s children against `items`, keyed by `makeKey(item)`. Items
+// without an existing node are built; existing nodes get `update(node, item)`
+// (which may mutate in place or return a replacement); orphaned nodes are
+// removed. Order in `parent` is kept in sync with `items`.
+function reconcile(parent, items, makeKey, build, update) {
+  const existing = new Map();
+  for (const child of Array.from(parent.children)) {
+    const k = child.dataset && child.dataset.key;
+    if (k !== undefined && k !== '') existing.set(k, child);
+  }
+  const seen = new Set();
+  let prev = null;
+  for (const item of items) {
+    const key = String(makeKey(item));
+    seen.add(key);
+    let node = existing.get(key);
+    if (!node) {
+      node = build(item);
+      node.dataset.key = key;
+    } else {
+      const replaced = update(node, item);
+      if (replaced && replaced !== node) {
+        replaced.dataset.key = key;
+        node.replaceWith(replaced);
+        node = replaced;
+      }
+    }
+    const expectedNext = prev ? prev.nextSibling : parent.firstChild;
+    if (expectedNext !== node) parent.insertBefore(node, expectedNext);
+    prev = node;
+  }
+  for (const [k, node] of existing) {
+    if (!seen.has(k)) node.remove();
+  }
+}
+
 export function initRenderer() {
   if (layersInited) return;
   svg.setAttribute('viewBox', `0 0 ${SVG_W} ${SVG_H}`);
@@ -145,7 +181,6 @@ export function checkMeterPlacement(meter) {
 
 export function render() {
   if (!layersInited) initRenderer();
-  clearChildren(wiresG);
   clearChildren(compsG);
   clearChildren(termsG);
   clearChildren(previewG);
@@ -156,18 +191,18 @@ export function render() {
   // bar appears to sit on top of a continuous wire (visible on both sides).
   const wireBars = planWireBars();
 
-  // Render wires (before components so they are below)
+  // Per-wire reconcile: unchanged wires skip DOM work entirely, class-only
+  // changes (selected / active / reverse) mutate the existing path, and only
+  // path-shape changes trigger a node replacement.
   const draggingComp = editor.dragging ? editor.dragging.compId : null;
-  const pendingNow = state.pendingWire;
+  const wireInfos = [];
   for (const w of state.wires) {
     // During a drag, route the live wires without writing to w.path so a
     // single drop still gets a proper post-drag reroute.
     const isLive = draggingComp && (w.a.compId === draggingComp || w.b.compId === draggingComp);
     const pts = isLive ? null : resolveWirePath(w);
     const fullPts = isLive ? dragPreviewPts(w) : pts;
-    if (!fullPts) continue;
-    const drawPts = fullPts;
-    if (!drawPts || drawPts.length < 2) continue;
+    if (!fullPts || fullPts.length < 2) continue;
     let cls = 'wire';
     if (state.selectedId === 'wire:' + w.id) cls += ' selected';
     if (state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen && state.toggles.current) {
@@ -181,50 +216,15 @@ export function render() {
         if (Va !== undefined && Vb !== undefined && Vb > Va) cls += ' reverse';
       }
     }
-    const wireGroup = svgEl('g', {
-      class: 'wire-group',
-      'data-wid': w.id,
-      onpointerenter: () => setHoveredWire(w.id),
-      onpointerleave: () => { if (editor.hoveredWireId === w.id) setHoveredWire(null); },
-    });
-    wireGroup.appendChild(svgEl('path', {
-      class: cls, d: toSvgPath(drawPts),
-      'data-wid': w.id,
-      onclick: (ev) => {
-        ev.stopPropagation();
-        if (state.tool === 'delete') { deleteWire(w.id); return; }
-        setSelectedId('wire:' + w.id);
-      },
-    }));
-    wireGroup.appendChild(svgEl('path', {
-      class: 'wire-hover-hit',
-      d: toSvgPath(drawPts),
-      fill: 'none',
-      stroke: 'transparent',
-      'stroke-width': 16,
-      'data-wid': w.id,
-    }));
-    // Corner-connector dots appear while this wire is the hover target and
-    // nothing else is pending. They live inside the wire's own group so the
-    // hover state doesn't flicker as the cursor travels between wire and dot.
-    if (editor.hoveredWireId === w.id && drawPts.length >= 3) {
-      for (let i = 1; i < drawPts.length - 1; i++) {
-        const cp = drawPts[i];
-        wireGroup.appendChild(svgEl('circle', { class: 'wire-corner', cx: cp.x, cy: cp.y, r: 5 }));
-        wireGroup.appendChild(svgEl('circle', {
-          class: 'terminal hit wire-corner-hit',
-          cx: cp.x, cy: cp.y, r: 14,
-          'data-wire-corner': w.id + ':' + i,
-          onpointerdown: (ev) => {
-            ev.stopPropagation();
-            const jid = splitWireAtCorner(w.id, { x: cp.x, y: cp.y }, i);
-            if (jid) onTerminalPointerDown(ev, null, null, jid);
-          },
-        }));
-      }
-    }
-    wiresG.appendChild(wireGroup);
+    wireInfos.push({ w, drawPts: fullPts, cls, isHovered: editor.hoveredWireId === w.id });
   }
+  reconcile(
+    wiresG,
+    wireInfos,
+    info => info.w.id,
+    info => buildWireGroup(info),
+    (node, info) => updateWireGroup(node, info),
+  );
 
   // Render components
   for (const c of state.components) compsG.appendChild(renderComponent(c));
@@ -298,6 +298,84 @@ export function render() {
 
   updateHUD();
   updateReadout();
+}
+
+// Build a fresh <g.wire-group> for a wire. Used by reconcile() when no
+// existing node is found for this wire id.
+function buildWireGroup(info) {
+  const { w, drawPts, cls, isHovered } = info;
+  const d = toSvgPath(drawPts);
+  const wireGroup = svgEl('g', {
+    class: 'wire-group',
+    'data-wid': w.id,
+    onpointerenter: () => setHoveredWire(w.id),
+    onpointerleave: () => { if (editor.hoveredWireId === w.id) setHoveredWire(null); },
+  });
+  wireGroup.appendChild(svgEl('path', {
+    class: cls, d,
+    'data-wid': w.id,
+    'data-role': 'visible',
+    onclick: (ev) => {
+      ev.stopPropagation();
+      if (state.tool === 'delete') { deleteWire(w.id); return; }
+      setSelectedId('wire:' + w.id);
+    },
+  }));
+  wireGroup.appendChild(svgEl('path', {
+    class: 'wire-hover-hit',
+    d, fill: 'none', stroke: 'transparent', 'stroke-width': 16,
+    'data-wid': w.id,
+    'data-role': 'hit',
+  }));
+  if (isHovered && drawPts.length >= 3) appendHoverDots(wireGroup, w, drawPts);
+  return wireGroup;
+}
+
+// Patch an existing wire group in place. Class-only changes touch a single
+// attribute; geometry changes also rewrite the two `d`s and refresh the
+// hover dots so they stay glued to the new corner positions.
+function updateWireGroup(node, info) {
+  const { w, drawPts, cls, isHovered } = info;
+  const d = toSvgPath(drawPts);
+  const visible = node.querySelector(':scope > path[data-role="visible"]');
+  const hit = node.querySelector(':scope > path[data-role="hit"]');
+  if (!visible || !hit) return buildWireGroup(info); // unexpected shape — rebuild
+  if (visible.getAttribute('d') !== d) {
+    visible.setAttribute('d', d);
+    hit.setAttribute('d', d);
+    // Corner positions moved — reset and re-add if currently hovered.
+    node.querySelectorAll('.wire-corner, .wire-corner-hit').forEach(n => n.remove());
+    if (isHovered && drawPts.length >= 3) appendHoverDots(node, w, drawPts);
+  } else {
+    // Path unchanged. The hover dots are owned by setHoveredWire/clearWireHoverDots
+    // between renders, so don't touch them here — but if the cached state
+    // disagrees with the DOM (e.g. first render after a hover began before the
+    // group existed), reconcile it now.
+    const hasDots = !!node.querySelector(':scope > .wire-corner');
+    if (isHovered && !hasDots && drawPts.length >= 3) appendHoverDots(node, w, drawPts);
+    else if (!isHovered && hasDots) {
+      node.querySelectorAll('.wire-corner, .wire-corner-hit').forEach(n => n.remove());
+    }
+  }
+  if (visible.getAttribute('class') !== cls) visible.setAttribute('class', cls);
+  return node;
+}
+
+function appendHoverDots(g, w, pts) {
+  for (let i = 1; i < pts.length - 1; i++) {
+    const cp = pts[i];
+    g.appendChild(svgEl('circle', { class: 'wire-corner', cx: cp.x, cy: cp.y, r: 5 }));
+    g.appendChild(svgEl('circle', {
+      class: 'terminal hit wire-corner-hit',
+      cx: cp.x, cy: cp.y, r: 14,
+      'data-wire-corner': w.id + ':' + i,
+      onpointerdown: (ev) => {
+        ev.stopPropagation();
+        const jid = splitWireAtCorner(w.id, { x: cp.x, y: cp.y }, i);
+        if (jid) onTerminalPointerDown(ev, null, null, jid);
+      },
+    }));
+  }
 }
 
 export function renderComponent(c) {
@@ -680,20 +758,7 @@ function drawWireHoverDots(wireId) {
   if (!wire) return;
   const pts = resolveWirePath(wire);
   if (!pts || pts.length < 3) return;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const cp = pts[i];
-    g.appendChild(svgEl('circle', { class: 'wire-corner', cx: cp.x, cy: cp.y, r: 5 }));
-    g.appendChild(svgEl('circle', {
-      class: 'terminal hit wire-corner-hit',
-      cx: cp.x, cy: cp.y, r: 14,
-      'data-wire-corner': wire.id + ':' + i,
-      onpointerdown: (ev) => {
-        ev.stopPropagation();
-        const jid = splitWireAtCorner(wire.id, { x: cp.x, y: cp.y }, i);
-        if (jid) onTerminalPointerDown(ev, null, null, jid);
-      },
-    }));
-  }
+  appendHoverDots(g, wire, pts);
 }
 
 export function setSelectedId(id) {
