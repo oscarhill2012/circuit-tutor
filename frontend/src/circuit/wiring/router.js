@@ -35,6 +35,12 @@ const LANE_STEP = 10;     // offset applied when a cleaner lane is available
  *   treated as obstacles (e.g. the wire being rerouted).
  * @param {{x:number,y:number}[]} [opts.previousPath] prior route for this
  *   wire — edges along it get a small reuse bonus to keep layouts stable.
+ * @param {Array} [opts.obstacles] pre-collected component bounding boxes
+ *   (matching collectComponentBoxes output). When supplied, the router skips
+ *   re-collecting them — used by the drag fast-path to share one obstacle
+ *   set across every attached wire reroute in a single pointermove frame.
+ * @param {Array} [opts.wireSegs] pre-collected wire segments (matching
+ *   collectWireSegments output). Same purpose as opts.obstacles.
  * @returns {{x:number,y:number}[]|null}
  */
 export function route(source, target, opts = {}) {
@@ -48,8 +54,8 @@ export function route(source, target, opts = {}) {
   const excludeComps = opts.excludeComps
     || [source.compId, target.compId].filter(Boolean);
   const excludeWires = opts.excludeWires || [];
-  const obstacles = collectComponentBoxes(excludeComps);
-  const wireSegs = collectWireSegments(excludeWires);
+  const obstacles = opts.obstacles || collectComponentBoxes(excludeComps);
+  const wireSegs = opts.wireSegs || collectWireSegments(excludeWires);
 
   // Force the same stub length on every endpoint (including junctions) so
   // each wire has room for a current-readout bar before any 90° bend.

@@ -10,7 +10,7 @@
 
 import { state } from '../state/store.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
-import { render, svg, rerouteWiresFor, keyOfTerm, setSelectedId } from './renderer.js';
+import { render, svg, rerouteWiresFor, keyOfTerm, setSelectedId, beginDragFrame, applyDragFrame } from './renderer.js';
 import { termPos, endpointPos, endpointKey } from './geometry.js';
 import { route as routePath, segCross } from './wiring/router.js';
 import { previewPath } from './wiring/path.js';
@@ -143,6 +143,9 @@ export function onCompMouseDown(ev, c) {
   editor.dragging = {
     compId: c.id, offsetX: p.x - c.x, offsetY: p.y - c.y,
     moved: false, started: JSON.stringify(c),
+    // Pre-collected obstacles + attached wires shared across every
+    // pointermove frame for this drag — see beginDragFrame in renderer.js.
+    frame: beginDragFrame(c.id),
   };
   setSelectedId(c.id);
 }
@@ -218,7 +221,11 @@ export function initCanvasInteractions() {
         c.x = snap(p.x - editor.dragging.offsetX);
         c.y = snap(p.y - editor.dragging.offsetY);
         editor.dragging.moved = true;
-        render();
+        // Drag fast-path: mutate transform + reroute attached wires only.
+        // No render(): the rest of the SVG is untouched, and w.path is left
+        // as-is so the post-drop rerouteWiresFor still runs against the
+        // committed previous path.
+        applyDragFrame(editor.dragging.frame);
       }
       return;
     }

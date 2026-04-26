@@ -9,6 +9,7 @@ import { deleteWire, deleteComponent, splitWireAtCorner } from '../state/actions
 import { updateHUD, updateReadout } from '../ui/canvas.js';
 import { termPos, endpointPos } from './geometry.js';
 import { route as routePath } from './wiring/router.js';
+import { collectComponentBoxes, collectWireSegments } from './wiring/obstacles.js';
 import { toSvgPath, previewPath } from './wiring/path.js';
 
 export const svg = document.getElementById('canvas');
@@ -181,7 +182,6 @@ export function checkMeterPlacement(meter) {
 
 export function render() {
   if (!layersInited) initRenderer();
-  clearChildren(compsG);
   clearChildren(termsG);
   clearChildren(previewG);
   clearChildren(wireBarsG);
@@ -226,8 +226,18 @@ export function render() {
     (node, info) => updateWireGroup(node, info),
   );
 
-  // Render components
-  for (const c of state.components) compsG.appendChild(renderComponent(c));
+  // Per-component reconcile: each component owns a stable <g data-cid="..">
+  // node. Updates currently rebuild the whole sub-tree (cheapest correct path
+  // until label/brightness/meter visuals are split out), but the keyed node
+  // is what makes the drag fast-path possible — `applyDragFrame` mutates the
+  // dragged comp's transform + terminals in place without rebuilding.
+  reconcile(
+    compsG,
+    state.components,
+    c => c.id,
+    c => renderComponent(c),
+    (_node, c) => renderComponent(c),
+  );
 
   // Terminal hit areas with explicit connector visual states.
   const pending = state.pendingWire;
@@ -245,7 +255,10 @@ export function render() {
       else if (isInvalid) cls += ' invalid';
       else if (isHovered) cls += ' hover';
       else if (isValidTarget) cls += ' valid';
-      termsG.appendChild(svgEl('circle', { class: cls, cx: p.x, cy: p.y, r: 4 }));
+      termsG.appendChild(svgEl('circle', {
+        class: cls, cx: p.x, cy: p.y, r: 4,
+        'data-comp': c.id, 'data-tname': t.n,
+      }));
       termsG.appendChild(svgEl('circle', {
         class: 'terminal hit', cx: p.x, cy: p.y, r: 16,
         'data-term': k,
@@ -759,6 +772,77 @@ function drawWireHoverDots(wireId) {
   const pts = resolveWirePath(wire);
   if (!pts || pts.length < 3) return;
   appendHoverDots(g, wire, pts);
+}
+
+// ---------------------------------------------------------------------------
+// Drag fast-path. Used by the editor's pointermove handler while a component
+// is being dragged. Bypasses render() entirely:
+//   * Pre-collect routing obstacles ONCE per drag (other components don't
+//     move while one is being dragged), and the wire segments to avoid
+//     (every committed wire except the ones attached to the dragged comp).
+//   * On each move, mutate transform on the dragged comp's <g>, recompute
+//     and write cx/cy on its terminals, and rewrite path `d` on each
+//     attached wire — without writing w.path so a single drop still
+//     triggers a proper post-drag reroute via rerouteWiresFor.
+// ---------------------------------------------------------------------------
+
+export function beginDragFrame(compId) {
+  const attached = state.wires.filter(w =>
+    w.a.compId === compId || w.b.compId === compId);
+  const obstacles = collectComponentBoxes([compId]);
+  const wireSegs = collectWireSegments(attached.map(w => w.id));
+  return { compId, attached, obstacles, wireSegs };
+}
+
+export function applyDragFrame(ctx) {
+  if (!ctx || !layersInited) return;
+  const c = state.components.find(x => x.id === ctx.compId);
+  if (!c) return;
+
+  const compNode = compsG.querySelector(`g.comp[data-cid="${c.id}"]`);
+  if (compNode) compNode.setAttribute('transform', `translate(${c.x}, ${c.y})`);
+
+  for (const t of COMP[c.type].terms) {
+    const p = termPos(c, t.n);
+    const sel = `[data-comp="${c.id}"][data-tname="${t.n}"]`;
+    termsG.querySelectorAll(sel).forEach(node => {
+      node.setAttribute('cx', p.x);
+      node.setAttribute('cy', p.y);
+    });
+  }
+
+  for (const w of ctx.attached) {
+    const drawPts = dragRoute(w, ctx);
+    if (!drawPts || drawPts.length < 2) continue;
+    const d = toSvgPath(drawPts);
+    const wireG = wiresG.querySelector(`g.wire-group[data-wid="${w.id}"]`);
+    if (!wireG) continue;
+    const visible = wireG.querySelector(':scope > path[data-role="visible"]');
+    const hit = wireG.querySelector(':scope > path[data-role="hit"]');
+    if (visible) visible.setAttribute('d', d);
+    if (hit) hit.setAttribute('d', d);
+  }
+}
+
+function dragRoute(w, ctx) {
+  const next = routePath(w.a, w.b, {
+    excludeComps: [w.a.compId, w.b.compId].filter(Boolean),
+    excludeWires: ctx.attached.map(x => x.id),
+    obstacles: ctx.obstacles,
+    wireSegs: ctx.wireSegs,
+    previousPath: w.path,
+  });
+  if (next && next.length >= 2) return next;
+  // Last-ditch L-shape so the wire stays glued to its endpoints even if
+  // the router fails (e.g. no clearance found).
+  const p0 = endpointPos(w.a);
+  const pn = endpointPos(w.b);
+  if (!p0 || !pn) return null;
+  const dx = pn.x - p0.x, dy = pn.y - p0.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return [p0, { x: p0.x + dx / 2, y: p0.y }, { x: p0.x + dx / 2, y: pn.y }, pn];
+  }
+  return [p0, { x: p0.x, y: p0.y + dy / 2 }, { x: pn.x, y: p0.y + dy / 2 }, pn];
 }
 
 export function setSelectedId(id) {

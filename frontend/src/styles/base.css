@@ -31,7 +31,10 @@ button { font-family: inherit; color: inherit; }
 .grid-line { stroke: var(--grid); stroke-width: 0.5; }
 .terminal {
   fill: #0b1020; stroke: var(--muted); stroke-width: 1.5;
-  transition: all 120ms;
+  /* Transition only visual properties — NOT cx/cy/transform — so terminals
+     track the dragged component frame-by-frame without animating toward
+     each new position (which felt laggy in the per-frame mutation path). */
+  transition: fill 120ms, stroke 120ms, stroke-width 120ms, r 120ms, filter 120ms;
 }
 .terminal.hit { fill: transparent; stroke: transparent; }
 .terminal.hover { stroke: var(--accent); fill: rgba(45,226,179,0.35); r: 6; }
