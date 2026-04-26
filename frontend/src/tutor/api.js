@@ -8,6 +8,7 @@ import { applyVisualInstructions } from '../circuit/renderer.js';
 import { getActiveTask } from '../tasks/engine.js';
 import { pushUserMsg, appendThinking, removeThinking, appendTutorMsg } from '../ui/tutorPanel.js';
 import { PINNED, retrieve } from '../data/knowledgeBase.js';
+import { isDevMode, captureRequest, captureResponse, captureError } from './devInspector.js';
 
 const TUTOR_URL = '/api/tutor';
 
@@ -133,17 +134,22 @@ async function flushTutorQueue() {
 async function sendOneTutorRequest(combinedMessage) {
   const thinkingId = appendThinking();
   try {
+    const payload = buildUserPayload(combinedMessage);
+    if (isDevMode()) payload.debug = true;
+    captureRequest(payload);
     const res = await fetch(TUTOR_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildUserPayload(combinedMessage)),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       removeThinking(thinkingId);
+      captureError(`HTTP ${res.status}`);
       appendTutorMsg({ reply_type:'direct_explanation', assistant_text: `I couldn't reach the tutor service (${res.status}).` });
       return;
     }
     const data = await res.json();
+    captureResponse(data);
     const parsed = data.reply || { reply_type:'direct_explanation', assistant_text: 'No reply.' };
     state.lastAnalysis = data.analysis || null;
     if (typeof parsed.rolling_summary === 'string' && parsed.rolling_summary.trim()) {
@@ -155,6 +161,7 @@ async function sendOneTutorRequest(combinedMessage) {
     state.messages.push({ role: 'assistant', content: parsed });
   } catch (err) {
     removeThinking(thinkingId);
+    captureError(err);
     appendTutorMsg({ reply_type:'direct_explanation', assistant_text: `Network error: ${err.message}` });
   }
 }
@@ -176,6 +183,8 @@ export async function askTutorCheckScenario(task) {
       parameters: task.data.parameters || {},
       success_criteria: task.data.successCriteria || {},
     };
+    if (isDevMode()) payload.debug = true;
+    captureRequest(payload);
     const res = await fetch(TUTOR_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -183,11 +192,13 @@ export async function askTutorCheckScenario(task) {
     });
     removeThinking(thinkingId);
     if (!res.ok) {
+      captureError(`HTTP ${res.status}`);
       const reply = { reply_type: 'direct_explanation', assistant_text: `I couldn't reach the tutor service (${res.status}).` };
       appendTutorMsg(reply);
       return { verdict: 'fail', reply };
     }
     const data = await res.json();
+    captureResponse(data);
     const parsed = data.reply || { reply_type: 'direct_explanation', assistant_text: 'No reply.' };
     state.lastAnalysis = data.analysis || null;
     if (typeof parsed.rolling_summary === 'string' && parsed.rolling_summary.trim()) {
@@ -200,6 +211,7 @@ export async function askTutorCheckScenario(task) {
     return { verdict, reply: parsed };
   } catch (err) {
     removeThinking(thinkingId);
+    captureError(err);
     const reply = { reply_type: 'direct_explanation', assistant_text: `Network error: ${err.message}` };
     appendTutorMsg(reply);
     return { verdict: 'fail', reply };

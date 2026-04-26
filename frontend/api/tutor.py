@@ -390,13 +390,26 @@ class handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001 - defensive; don't 500 the student
             analysis = {"error": f"analysis failed: {exc}"}
 
+        user_payload = _build_user_payload(req, analysis)
         try:
-            parsed = _call_openai(_build_user_payload(req, analysis))
+            parsed = _call_openai(user_payload)
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc(file=sys.stderr)
             parsed = _safe_fallback(f"upstream model error: {type(exc).__name__}: {exc}")
 
-        self._respond(200, {"reply": parsed, "analysis": analysis})
+        response = {"reply": parsed, "analysis": analysis}
+        # Dev-only echo: when the client opts in via `debug: true`, return the
+        # exact strings forwarded to OpenAI so we can verify the RAG/context
+        # pipeline. Production UI never sets this flag.
+        if req.get("debug") is True:
+            response["debug"] = {
+                "system_prompt": SYSTEM_PROMPT,
+                "user_payload": user_payload,
+                "model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+                "payload_char_budget": _PAYLOAD_CHAR_BUDGET,
+                "payload_char_count": len(user_payload),
+            }
+        self._respond(200, response)
 
     def do_GET(self):
         self._respond(200, {

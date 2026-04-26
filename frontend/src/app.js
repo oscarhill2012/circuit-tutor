@@ -10,6 +10,7 @@ import { initPalette } from './ui/palette.js';
 import { initTools, initKeyboard, updateReadout } from './ui/canvas.js';
 import { initTaskControls, loadTasks, openTaskModal } from './tasks/engine.js';
 import { initTutorPanel } from './ui/tutorPanel.js';
+import { initDevInspector } from './tutor/devInspector.js';
 
 export { state };
 
@@ -21,6 +22,7 @@ export async function boot() {
   initCanvasInteractions();
   initTaskControls();
   initTutorPanel();
+  initDevInspector();
 
   try { await loadTasks(); } catch (err) { console.error('Task load failed:', err); }
 
