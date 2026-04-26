@@ -2,6 +2,7 @@
 // Rendering is triggered by callers via render() after a mutation.
 
 import { state, GRID } from './store.js';
+import { Sel, SelKind } from './constants.js';
 import { COMP, COMP_PREFIX } from '../circuit/schema.js';
 import { render } from '../circuit/renderer.js';
 
@@ -49,14 +50,14 @@ export function undo() {
   if (!state.history.length) return;
   state.future.push(snapshot());
   restore(state.history.pop());
-  state.selectedId = null; simulate(); render();
+  state.selection = null; simulate(); render();
 }
 
 export function redo() {
   if (!state.future.length) return;
   state.history.push(snapshot());
   restore(state.future.pop());
-  state.selectedId = null; simulate(); render();
+  state.selection = null; simulate(); render();
 }
 
 // Physics lives in sim/physics.js (loaded as classic script, window.Physics).
@@ -72,7 +73,7 @@ export function deleteComponent(cid) {
   state.components = state.components.filter(c => c.id !== cid);
   state.wires = state.wires.filter(w => w.a.compId !== cid && w.b.compId !== cid);
   pruneOrphanJunctions();
-  if (state.selectedId === cid) state.selectedId = null;
+  if (Sel.matches(state.selection, SelKind.COMPONENT, cid)) state.selection = null;
   simulate(); render();
 }
 
@@ -117,7 +118,7 @@ export function loadInitialCircuit(initial, taskId) {
   }));
   state.wires = (initial.wires || []).map(w => ({ ...w }));
   state.junctions = (initial.junctions || []).map(j => ({ ...j }));
-  state.selectedId = null;
+  state.selection = null;
   state.lockedIds = new Set(initial.locked || []);
   state.loadedTaskId = taskId;
   // Make sure id allocator keeps generating unique ids beyond the pinned set.
@@ -134,7 +135,7 @@ export function clearCircuit() {
   state.components = [];
   state.wires = [];
   state.junctions = [];
-  state.selectedId = null;
+  state.selection = null;
   state.lockedIds = new Set();
   state.loadedTaskId = null;
   simulate(); render();
@@ -186,6 +187,6 @@ export function addComponent(type, x, y) {
   const id = uid(type);
   const props = { ...(COMP[type].defaultProps || {}) };
   state.components.push({ id, type, x: snap(x), y: snap(y), props });
-  state.selectedId = id;
+  state.selection = Sel.component(id);
   simulate(); render();
 }

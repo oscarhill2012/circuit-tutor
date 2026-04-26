@@ -42,7 +42,7 @@ function resetState() {
   state.wires = [];
   state.junctions = [];
   state.pendingWire = null;
-  state.selectedId = null;
+  state.selection = null;
   state.nextId = 1;
   state.lockedIds = new Set();
   state.toggles = { current: true, voltage: true, labels: true };

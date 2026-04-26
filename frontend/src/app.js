@@ -30,6 +30,7 @@ export async function boot() {
   // freely from the palette.
   state.history = [];
   state.future = [];
+  console.assert(state.selection === null, 'selection starts null');
   simulate();
   render();
   updateReadout();

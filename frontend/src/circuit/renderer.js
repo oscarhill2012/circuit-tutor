@@ -3,6 +3,7 @@
 // callbacks highlight/dim .comp groups by id).
 
 import { state, SVG_W, SVG_H, EPS } from '../state/store.js';
+import { Tool, Sel, SelKind } from '../state/constants.js';
 import { COMP } from './schema.js';
 import { editor, onCompMouseDown, onTerminalPointerDown } from './editor.js';
 import { deleteWire, deleteComponent, splitWireAtCorner } from '../state/actions.js';
@@ -202,7 +203,7 @@ export function render() {
     const fullPts = isLive ? dragPreviewPts(w) : pts;
     if (!fullPts || fullPts.length < 2) continue;
     let cls = 'wire';
-    if (state.selectedId === 'wire:' + w.id) cls += ' selected';
+    if (Sel.matches(state.selection, SelKind.WIRE, w.id)) cls += ' selected';
     if (state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen && state.toggles.current) {
       const nodeA = state.sim.getNodeByEp ? state.sim.getNodeByEp(w.a) : state.sim.getNode(w.a.compId, w.a.term);
       const anyCurrent = state.sim.elements.some(e => (e.na===nodeA||e.nb===nodeA) && Math.abs(e.current) > 1e-4);
@@ -310,16 +311,16 @@ function buildWireGroup(info) {
     'data-wid': w.id,
     onpointerenter: () => setHoveredWire(w.id),
     onpointerleave: () => { if (editor.hoveredWireId === w.id) setHoveredWire(null); },
+    onclick: (ev) => {
+      ev.stopPropagation();
+      if (state.tool === Tool.DELETE) { deleteWire(w.id); return; }
+      setSelection(Sel.wire(w.id));
+    },
   });
   wireGroup.appendChild(svgEl('path', {
     class: cls, d,
     'data-wid': w.id,
     'data-role': 'visible',
-    onclick: (ev) => {
-      ev.stopPropagation();
-      if (state.tool === 'delete') { deleteWire(w.id); return; }
-      setSelectedId('wire:' + w.id);
-    },
   }));
   wireGroup.appendChild(svgEl('path', {
     class: 'wire-hover-hit',
@@ -383,14 +384,14 @@ export function renderComponent(c) {
   const vis = state.visuals && state.visuals[c.id];
   const visCls = vis ? ' tutor-' + vis.action : '';
   const g = svgEl('g', {
-    class: 'comp' + (state.selectedId === c.id ? ' selected' : '') + (isLocked ? ' locked' : '') + visCls,
+    class: 'comp' + (Sel.matches(state.selection, SelKind.COMPONENT, c.id) ? ' selected' : '') + (isLocked ? ' locked' : '') + visCls,
     transform: `translate(${c.x}, ${c.y})`,
     'data-cid': c.id,
     onpointerdown: (ev) => onCompMouseDown(ev, c),
     onclick: (ev) => {
       ev.stopPropagation();
-      if (state.tool === 'delete') { deleteComponent(c.id); return; }
-      setSelectedId(c.id);
+      if (state.tool === Tool.DELETE) { deleteComponent(c.id); return; }
+      setSelection(Sel.component(c.id));
     },
   });
 
@@ -816,7 +817,7 @@ function scheduleVisualsCleanup() {
 // Hover and selection toggles: mutate classes on existing nodes instead of
 // rebuilding the entire SVG. Falls back to a no-op when the target node has
 // not been rendered yet (the next render() will pick the state up via
-// editor.hoveredWireId / state.selectedId).
+// editor.hoveredWireId / state.selection).
 
 export function setHoveredWire(id) {
   if (editor.hoveredWireId === id) return;
@@ -915,29 +916,30 @@ function dragRoute(w, ctx) {
   return [p0, { x: p0.x, y: p0.y + dy / 2 }, { x: pn.x, y: p0.y + dy / 2 }, pn];
 }
 
-export function setSelectedId(id) {
-  if (state.selectedId === id) {
+export function setSelection(sel) {
+  const prev = state.selection;
+  if (prev === sel || (prev && sel && prev.kind === sel.kind && prev.id === sel.id)) {
     updateReadout();
     return;
   }
-  state.selectedId = id;
+  state.selection = sel;
   applySelectionClasses();
   updateReadout();
 }
 
 function applySelectionClasses() {
+  const sel = state.selection;
   if (wiresG) {
     wiresG.querySelectorAll('path.wire.selected').forEach(n => n.classList.remove('selected'));
-    if (state.selectedId && typeof state.selectedId === 'string' && state.selectedId.startsWith('wire:')) {
-      const wid = state.selectedId.slice(5);
-      const path = wiresG.querySelector(`g.wire-group[data-wid="${wid}"] path.wire`);
+    if (Sel.isWire(sel)) {
+      const path = wiresG.querySelector(`g.wire-group[data-wid="${sel.id}"] path.wire`);
       if (path) path.classList.add('selected');
     }
   }
   if (compsG) {
     compsG.querySelectorAll('g.comp.selected').forEach(n => n.classList.remove('selected'));
-    if (state.selectedId && !(typeof state.selectedId === 'string' && state.selectedId.startsWith('wire:'))) {
-      const g = compsG.querySelector(`g.comp[data-cid="${state.selectedId}"]`);
+    if (Sel.isComponent(sel)) {
+      const g = compsG.querySelector(`g.comp[data-cid="${sel.id}"]`);
       if (g) g.classList.add('selected');
     }
   }

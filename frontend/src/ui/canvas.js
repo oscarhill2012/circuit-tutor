@@ -1,6 +1,7 @@
 // Canvas HUD chips, readout panel, tool/toggle buttons, keyboard shortcuts.
 
 import { state } from '../state/store.js';
+import { Sel, isValidTool } from '../state/constants.js';
 import { pushHistory, simulate, undo, redo, deleteComponent, deleteWire, clearCircuit } from '../state/actions.js';
 import { render, svg } from '../circuit/renderer.js';
 
@@ -47,11 +48,11 @@ export function updateReadout() {
   const rEl = document.getElementById('ro-sel-r');
   vEl.textContent = iEl.textContent = rEl.textContent = '—';
 
-  const sel = state.selectedId;
+  const sel = state.selection;
   if (!sel) { hd.textContent = 'Select a component'; return; }
-  if (sel.startsWith('wire:')) { hd.textContent = sel + ' — wire segment'; return; }
+  if (Sel.isWire(sel)) { hd.textContent = sel.id + ' — wire segment'; return; }
 
-  const c = state.components.find(x => x.id === sel);
+  const c = state.components.find(x => x.id === sel.id);
   if (!c) { hd.textContent = 'Select a component'; return; }
   hd.textContent = `${c.id} · ${c.type}`;
 
@@ -82,12 +83,18 @@ function formatResistance(r) {
 export function initTools() {
   document.querySelectorAll('.tools button[data-tool]').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.tool = btn.dataset.tool;
+      const next = btn.dataset.tool;
+      if (!isValidTool(next)) return;
+      state.tool = next;
       document.querySelectorAll('.tools button[data-tool]').forEach(b => b.classList.toggle('active', b === btn));
       svg.className.baseVal = 'tool-' + state.tool;
       state.pendingWire = null;
       render();
     });
+  });
+  // Dev-time check: every tool button in the DOM must map to a known Tool.
+  document.querySelectorAll('.tools button[data-tool]').forEach(b => {
+    if (!isValidTool(b.dataset.tool)) console.warn('unknown tool:', b.dataset.tool);
   });
   document.getElementById('btn-undo').onclick = undo;
   document.getElementById('btn-redo').onclick = redo;
@@ -109,14 +116,15 @@ export function initTools() {
 export function initKeyboard() {
   document.addEventListener('keydown', (ev) => {
     if (ev.target.tagName === 'INPUT') return;
-    if (ev.key === 'Delete' && state.selectedId) {
-      if (state.selectedId.startsWith('wire:')) deleteWire(state.selectedId.slice(5));
-      else deleteComponent(state.selectedId);
+    const sel = state.selection;
+    if (ev.key === 'Delete' && sel) {
+      if (Sel.isWire(sel)) deleteWire(sel.id);
+      else deleteComponent(sel.id);
     }
     if ((ev.ctrlKey || ev.metaKey) && ev.key === 'z') { ev.preventDefault(); undo(); }
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'y' || (ev.shiftKey && ev.key === 'Z'))) { ev.preventDefault(); redo(); }
-    if (ev.key === 's' && state.selectedId) {
-      const c = state.components.find(x => x.id === state.selectedId);
+    if (ev.key === 's' && Sel.isComponent(sel)) {
+      const c = state.components.find(x => x.id === sel.id);
       if (c && c.type === 'switch') { pushHistory(); c.props.closed = !c.props.closed; simulate(); render(); }
     }
   });

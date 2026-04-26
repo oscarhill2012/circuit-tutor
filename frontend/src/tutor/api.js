@@ -3,6 +3,7 @@
 // from the tutor's visual_instructions array.
 
 import { state } from '../state/store.js';
+import { SelKind } from '../state/constants.js';
 import { applyVisualInstructions } from '../circuit/renderer.js';
 import { getActiveTask } from '../tasks/engine.js';
 import { pushUserMsg, appendThinking, removeThinking, appendTutorMsg } from '../ui/tutorPanel.js';
@@ -17,6 +18,13 @@ const RETRIEVED_KB_LIMIT = 8;            // top-N retrieved snippets (pinned alw
 const MAX_COMPONENTS_IN_SNAPSHOT = 40;   // defensive cap for pathological circuits
 const MAX_WIRES_IN_SNAPSHOT = 80;
 const MAX_READINGS_IN_SNAPSHOT = 40;
+
+// Boundary conversion: the server schema for `selected` is a string — wires
+// are still serialised as `"wire:<id>"` here so the API contract is unchanged.
+function selectionForServer(sel) {
+  if (!sel) return null;
+  return sel.kind === SelKind.WIRE ? 'wire:' + sel.id : sel.id;
+}
 
 function circuitSnapshot() {
   const comps = state.components.slice(0, MAX_COMPONENTS_IN_SNAPSHOT).map(c => ({
@@ -81,7 +89,7 @@ function buildUserPayload(studentMessage) {
   return {
     student_message: studentMessage,
     circuit_state: circuitSnapshot(),
-    selected: state.selectedId,
+    selected: selectionForServer(state.selection),
     current_task: t ? { id: t.id, topic: t.topicId, type: t.type, difficulty: t.difficulty, data: t.data } : null,
     recent_history: recent,
     knowledge_snippets,

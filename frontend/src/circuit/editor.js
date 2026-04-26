@@ -9,8 +9,9 @@
 // Routing, validation and state-machine logic live in wiring/*.
 
 import { state } from '../state/store.js';
+import { Tool, Sel } from '../state/constants.js';
 import { pushHistory, simulate, snap } from '../state/actions.js';
-import { render, svg, rerouteWiresFor, keyOfTerm, setSelectedId, beginDragFrame, applyDragFrame } from './renderer.js';
+import { render, svg, rerouteWiresFor, keyOfTerm, setSelection, beginDragFrame, applyDragFrame } from './renderer.js';
 import { termPos, endpointPos, endpointKey } from './geometry.js';
 import { route as routePath, segCross } from './wiring/router.js';
 import { previewPath } from './wiring/path.js';
@@ -137,7 +138,7 @@ export function maybeSwapCrossedTerminals(compId) {
 }
 
 export function onCompMouseDown(ev, c) {
-  if (state.tool !== 'select') return;
+  if (state.tool !== Tool.SELECT) return;
   ev.stopPropagation();
   const p = svgPoint(ev);
   editor.dragging = {
@@ -147,12 +148,12 @@ export function onCompMouseDown(ev, c) {
     // pointermove frame for this drag — see beginDragFrame in renderer.js.
     frame: beginDragFrame(c.id),
   };
-  setSelectedId(c.id);
+  setSelection(Sel.component(c.id));
 }
 
 export function onTerminalPointerDown(ev, compId, term, junctionId) {
   const port = junctionId ? { junctionId } : { compId, term };
-  if (state.tool === 'delete') {
+  if (state.tool === Tool.DELETE) {
     const matches = junctionId
       ? (w) => w.a.junctionId === junctionId || w.b.junctionId === junctionId
       : (w) => (w.a.compId === compId && w.a.term === term)
@@ -256,7 +257,7 @@ export function initCanvasInteractions() {
         editor.hoveredTerm = null;
         return;
       }
-      setSelectedId(null);
+      setSelection(null);
     }
   });
 
