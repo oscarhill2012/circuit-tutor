@@ -14,7 +14,7 @@
 //     voltage and inferred R = V/I all matching expected values within tol.
 
 import { state } from '../state/store.js';
-import { askTutorAbout, askTutorCheckScenario } from '../tutor/api.js';
+import { askTutorCheckScenario } from '../tutor/api.js';
 import { loadInitialCircuit, clearCircuit } from '../state/actions.js';
 import { appendTutorMsg, clearChat } from '../ui/tutorPanel.js';
 

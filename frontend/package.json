@@ -2,7 +2,7 @@
     "name": "circuit-tutor",
     "version": "1.0.0",
     "private": true,
-    "scripts": {
-        "dev": "npx serve ."
+    "scripts": { 
+        "dev": "npx serve ." 
     }
 }

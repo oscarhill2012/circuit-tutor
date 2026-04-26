@@ -58,7 +58,6 @@ button { font-family: inherit; color: inherit; }
 .wire.reverse { animation-direction: reverse; }
 @keyframes flow { to { stroke-dashoffset: -16; } }
 .wire.preview { stroke: var(--accent); stroke-dasharray: 4 4; opacity: 0.8; }
-.wire.error { stroke: var(--danger); stroke-dasharray: 4 4; }
 .wire:hover { stroke: var(--info); cursor: pointer; }
 .comp text { font-family: 'JetBrains Mono', monospace; fill: var(--muted); font-size: 12px; }
 .comp .label { fill: var(--text); font-weight: 600; font-size: 11px; }
@@ -69,10 +68,8 @@ button { font-family: inherit; color: inherit; }
 .comp.selected .frame { stroke: var(--info); stroke-width: 2; fill: rgba(111,179,255,0.08); }
 .comp.locked .frame { stroke: var(--violet); stroke-width: 1.5; stroke-dasharray: 3 3; fill: rgba(178,140,255,0.06); }
 .comp.error .body { stroke: var(--danger); }
-.comp.success .body { stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(45,226,179,0.4)); }
 .comp .body { stroke: #b9c4dc; stroke-width: 2; fill: none; }
 .comp .fill { fill: var(--bg-2); stroke: #b9c4dc; stroke-width: 2; }
-.comp .glow { fill: var(--accent-2); opacity: 0; }
 .vbar-bg { fill: #1a2440; stroke: #2a3558; stroke-width: 0.5; }
 .vbar-fg { fill: var(--q-v); filter: drop-shadow(0 0 2px rgba(255,207,92,0.7)); }
 .ibar-fg { fill: var(--q-i); filter: drop-shadow(0 0 2px rgba(45,226,179,0.7)); }
@@ -119,9 +116,6 @@ button { font-family: inherit; color: inherit; }
 }
 .meter-lcd-text.v { fill: #ffcf5c; }
 .meter-lcd-bg.v { stroke: #ffcf5c; filter: drop-shadow(0 0 3px rgba(255,207,92,0.4)); }
-.label-float {
-  fill: var(--text); font-size: 10px; font-family: 'JetBrains Mono', monospace;
-}
 
 /* Tutor-driven visual instructions. Kept subtle — a soft ring of colour and a
    gentle pulse at most, nothing flashy. Auto-clears after ~6s. */

@@ -319,12 +319,3 @@ function fallback(srcPt, srcStub, tgtStub, tgtPt) {
     { x: tgtStub.x, y: srcStub.y }, tgtStub, tgtPt,
   ]));
 }
-
-// Utility used by renderer + tests.
-export function pathsEqual(a, b) {
-  if (!a || !b || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (Math.abs(a[i].x - b[i].x) > 0.5 || Math.abs(a[i].y - b[i].y) > 0.5) return false;
-  }
-  return true;
-}

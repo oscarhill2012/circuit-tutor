@@ -205,10 +205,3 @@ export async function askTutorCheckScenario(task) {
     return { verdict: 'fail', reply };
   }
 }
-
-export function askTutorAbout(prompt) {
-  const input = document.getElementById('chat-input');
-  input.value = prompt;
-  askTutor(prompt);
-  input.value = '';
-}
