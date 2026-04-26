@@ -183,8 +183,6 @@ export function checkMeterPlacement(meter) {
 export function render() {
   if (!layersInited) initRenderer();
   clearChildren(termsG);
-  clearChildren(previewG);
-  clearChildren(wireBarsG);
 
   // Plan all current bars before drawing wires. The wires render at full
   // length; each bar's opaque background covers the wire underneath so the
@@ -292,19 +290,8 @@ export function render() {
     }));
   }
 
-  // Preview wire
-  editor.previewEl = null;
-  if (state.pendingWire) {
-    const p1 = endpointPos(state.pendingWire.from);
-    if (p1) {
-      const p2 = { x: state.pendingWire.mouseX, y: state.pendingWire.mouseY };
-      editor.previewEl = svgEl('path', {
-        class: 'wire preview', d: previewPath(p1, p2),
-        'pointer-events': 'none',
-      });
-      previewG.appendChild(editor.previewEl);
-    }
-  }
+  // Preview wire — single stable node, mutated in place between renders.
+  reconcilePreview();
 
   // Current bars overlaid on each wire (component bars + KCL junction bars).
   renderWireBars(wireBars);
@@ -509,7 +496,7 @@ export function renderComponent(c) {
 
   // Voltage drop bar for resistors/bulbs, placed below the body. The current
   // bar that used to live here was promoted to a wire overlay (see
-  // planWireBars / drawWireBar below) so it can also visualise KCL splits at
+  // planWireBars / renderWireBars below) so it can also visualise KCL splits at
   // junctions.
   const showVBar = simEl && (c.type === 'bulb' || c.type === 'resistor')
     && state.sim && state.sim.ok && !state.sim.isShort
@@ -643,22 +630,39 @@ function planWireBars() {
 }
 
 function renderWireBars(bars) {
+  // Flatten the per-wire start/end map into a keyed list and reconcile it
+  // against the existing bar groups. Unchanged bars skip DOM work; geometry
+  // / label changes mutate attributes in place on the existing nodes.
+  const items = [];
   for (const w of state.wires) {
     const entry = bars.get(w.id);
     if (!entry) continue;
     const pts = resolveWirePath(w);
     if (!pts || pts.length < 2) continue;
-    if (entry.start) drawWireBar(wireBarsG, pts, true, entry.start);
-    if (entry.end) drawWireBar(wireBarsG, pts, false, entry.end);
+    if (entry.start) {
+      const geom = computeBarGeom(pts, true, entry.start);
+      if (geom) items.push({ key: w.id + ':start', geom, info: entry.start });
+    }
+    if (entry.end) {
+      const geom = computeBarGeom(pts, false, entry.end);
+      if (geom) items.push({ key: w.id + ':end', geom, info: entry.end });
+    }
   }
+  reconcile(
+    wireBarsG,
+    items,
+    item => item.key,
+    item => buildWireBar(item),
+    (node, item) => updateWireBar(node, item),
+  );
 }
 
-function drawWireBar(g, pts, atStart, info) {
+function computeBarGeom(pts, atStart, info) {
   const a = atStart ? pts[0] : pts[pts.length - 1];
   const b = atStart ? pts[1] : pts[pts.length - 2];
   const dx = b.x - a.x, dy = b.y - a.y;
   const segLen = Math.hypot(dx, dy);
-  if (segLen < TERMINAL_GAP + BAR_LEN + POST_BAR_GAP) return; // first segment too short — bail
+  if (segLen < TERMINAL_GAP + BAR_LEN + POST_BAR_GAP) return null; // first segment too short — bail
   const ux = dx / segLen, uy = dy / segLen;
 
   const bx0 = a.x + ux * TERMINAL_GAP;
@@ -677,9 +681,6 @@ function drawWireBar(g, pts, atStart, info) {
     rectW = BAR_T;
     rectH = BAR_LEN;
   }
-  g.appendChild(svgEl('rect', {
-    class: 'ibar-bg', x: rectX, y: rectY, width: rectW, height: rectH, rx: 3,
-  }));
 
   const frac = Math.min(1, Math.max(0, info.frac));
   const fillLen = BAR_LEN * frac;
@@ -691,25 +692,94 @@ function drawWireBar(g, pts, atStart, info) {
     fh = fillLen;
     if (uy < 0) fy = rectY + (BAR_LEN - fillLen);
   }
-  g.appendChild(svgEl('rect', {
-    class: 'ibar-fg', x: fx, y: fy, width: fw, height: fh, rx: 3,
-  }));
 
-  // Reading text just below (or beside, for vertical bars) the bar.
   const cx = rectX + rectW / 2;
   const cy = rectY + rectH / 2;
   const label = `${Math.abs(info.I).toFixed(2)}A`;
-  if (horiz) {
-    g.appendChild(svgEl('text', {
-      x: cx, y: rectY + rectH + 12,
-      'text-anchor': 'middle', class: 'bar-label i',
-    }, label));
-  } else {
-    g.appendChild(svgEl('text', {
-      x: rectX + rectW + 6, y: cy + 4,
-      class: 'bar-label i',
-    }, label));
+  const labelX = horiz ? cx : rectX + rectW + 6;
+  const labelY = horiz ? rectY + rectH + 12 : cy + 4;
+  const labelAnchor = horiz ? 'middle' : 'start';
+
+  return { rectX, rectY, rectW, rectH, fx, fy, fw, fh, label, labelX, labelY, labelAnchor };
+}
+
+function buildWireBar(item) {
+  const { geom } = item;
+  const g = svgEl('g', { class: 'ibar' });
+  g.appendChild(svgEl('rect', {
+    class: 'ibar-bg', 'data-role': 'bg',
+    x: geom.rectX, y: geom.rectY, width: geom.rectW, height: geom.rectH, rx: 3,
+  }));
+  g.appendChild(svgEl('rect', {
+    class: 'ibar-fg', 'data-role': 'fg',
+    x: geom.fx, y: geom.fy, width: geom.fw, height: geom.fh, rx: 3,
+  }));
+  g.appendChild(svgEl('text', {
+    'data-role': 'label',
+    x: geom.labelX, y: geom.labelY,
+    'text-anchor': geom.labelAnchor,
+    class: 'bar-label i',
+  }, geom.label));
+  return g;
+}
+
+function updateWireBar(node, item) {
+  const { geom } = item;
+  const bg = node.querySelector(':scope > rect[data-role="bg"]');
+  const fg = node.querySelector(':scope > rect[data-role="fg"]');
+  const tx = node.querySelector(':scope > text[data-role="label"]');
+  if (!bg || !fg || !tx) return buildWireBar(item); // unexpected shape — rebuild
+  setIfChanged(bg, 'x', geom.rectX);
+  setIfChanged(bg, 'y', geom.rectY);
+  setIfChanged(bg, 'width', geom.rectW);
+  setIfChanged(bg, 'height', geom.rectH);
+  setIfChanged(fg, 'x', geom.fx);
+  setIfChanged(fg, 'y', geom.fy);
+  setIfChanged(fg, 'width', geom.fw);
+  setIfChanged(fg, 'height', geom.fh);
+  setIfChanged(tx, 'x', geom.labelX);
+  setIfChanged(tx, 'y', geom.labelY);
+  setIfChanged(tx, 'text-anchor', geom.labelAnchor);
+  if (tx.textContent !== geom.label) tx.textContent = geom.label;
+  return node;
+}
+
+function setIfChanged(node, attr, value) {
+  const next = String(value);
+  if (node.getAttribute(attr) !== next) node.setAttribute(attr, next);
+}
+
+// Stable preview-wire node. While `pendingWire` is null the path is detached
+// (kept as a reference so subsequent renders can re-attach without rebuilding);
+// while pending it sits in `previewG` and only the `d` attribute changes.
+function reconcilePreview() {
+  const pending = state.pendingWire;
+  if (!pending) {
+    if (editor.previewEl && editor.previewEl.parentNode === previewG) {
+      previewG.removeChild(editor.previewEl);
+    }
+    editor.previewEl = null;
+    return;
   }
+  const p1 = endpointPos(pending.from);
+  if (!p1) {
+    if (editor.previewEl && editor.previewEl.parentNode === previewG) {
+      previewG.removeChild(editor.previewEl);
+    }
+    editor.previewEl = null;
+    return;
+  }
+  const p2 = { x: pending.mouseX, y: pending.mouseY };
+  const d = previewPath(p1, p2);
+  if (!editor.previewEl) {
+    editor.previewEl = svgEl('path', {
+      class: 'wire preview', d,
+      'pointer-events': 'none',
+    });
+  } else {
+    setIfChanged(editor.previewEl, 'd', d);
+  }
+  if (editor.previewEl.parentNode !== previewG) previewG.appendChild(editor.previewEl);
 }
 
 // Tutor-driven visual overlays. Instructions are stored in state.visuals so
