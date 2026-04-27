@@ -4,10 +4,10 @@
 
 import { state, SVG_W, SVG_H, EPS } from '../state/store.js';
 import { Tool, Sel, SelKind } from '../state/constants.js';
-import { COMP } from './schema.js';
+import { COMP, COMP_SCALE } from './schema.js';
 import { editor, onCompMouseDown, onTerminalPointerDown } from './editor.js';
 import { deleteWire, deleteComponent, splitWireAtCorner } from '../state/actions.js';
-import { updateHUD, updateReadout } from '../ui/canvas.js';
+import { updateReadout } from '../ui/canvas.js';
 import { termPos, endpointPos } from './geometry.js';
 import { route as routePath } from './wiring/router.js';
 import { collectComponentBoxes, collectWireSegments } from './wiring/obstacles.js';
@@ -297,7 +297,6 @@ export function render() {
   // Current bars overlaid on each wire (component bars + KCL junction bars).
   renderWireBars(wireBars);
 
-  updateHUD();
   updateReadout();
 }
 
@@ -385,7 +384,7 @@ export function renderComponent(c) {
   const visCls = vis ? ' tutor-' + vis.action : '';
   const g = svgEl('g', {
     class: 'comp' + (Sel.matches(state.selection, SelKind.COMPONENT, c.id) ? ' selected' : '') + (isLocked ? ' locked' : '') + visCls,
-    transform: `translate(${c.x}, ${c.y})`,
+    transform: `translate(${c.x}, ${c.y}) scale(${COMP_SCALE})`,
     'data-cid': c.id,
     onpointerdown: (ev) => onCompMouseDown(ev, c),
     onclick: (ev) => {
@@ -871,7 +870,7 @@ export function applyDragFrame(ctx) {
   if (!c) return;
 
   const compNode = compsG.querySelector(`g.comp[data-cid="${c.id}"]`);
-  if (compNode) compNode.setAttribute('transform', `translate(${c.x}, ${c.y})`);
+  if (compNode) compNode.setAttribute('transform', `translate(${c.x}, ${c.y}) scale(${COMP_SCALE})`);
 
   for (const t of COMP[c.type].terms) {
     const p = termPos(c, t.n);

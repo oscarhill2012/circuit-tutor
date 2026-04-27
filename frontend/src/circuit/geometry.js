@@ -1,12 +1,12 @@
 // Small geometry helpers shared by the renderer and the routing engine.
 // Kept in its own module to avoid circular imports between them.
 
-import { COMP } from './schema.js';
+import { COMP, COMP_SCALE } from './schema.js';
 import { state } from '../state/store.js';
 
 export function termPos(comp, termName) {
   const def = COMP[comp.type].terms.find(t => t.n === termName);
-  return { x: comp.x + def.x, y: comp.y + def.y };
+  return { x: comp.x + def.x * COMP_SCALE, y: comp.y + def.y * COMP_SCALE };
 }
 
 export function exitDir(comp, termName) {

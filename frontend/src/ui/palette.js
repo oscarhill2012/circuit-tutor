@@ -1,7 +1,7 @@
 // Left-hand component palette: icons, drag-to-canvas, click-to-center.
 
 import { SVG_W, SVG_H } from '../state/store.js';
-import { COMP_LABELS } from '../circuit/schema.js';
+import { COMP_LABELS, COMP_DESCRIPTIONS } from '../circuit/schema.js';
 import { svg } from '../circuit/renderer.js';
 import { svgPoint } from '../circuit/editor.js';
 import { addComponent } from '../state/actions.js';
@@ -22,14 +22,49 @@ export function paletteIcon(type) {
 export function initPalette() {
   const parts = document.getElementById('parts');
   parts.innerHTML = '';
+
+  // One floating tooltip element attached to <body> so it escapes the palette
+  // grid column's stacking context and any sibling overflow:hidden parents
+  // (canvas-wrap, rightcol). Positioned with `position: fixed` from the
+  // hovered .part's bounding rect.
+  let tip = document.getElementById('part-tooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'part-tooltip';
+    tip.className = 'part-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    tip.innerHTML = '<div class="part-tooltip-title"></div><div class="part-tooltip-body"></div>';
+    document.body.appendChild(tip);
+  }
+  let showTimer = null;
+  function hideTip() { clearTimeout(showTimer); tip.classList.remove('show'); }
+  function showTipFor(el, type) {
+    clearTimeout(showTimer);
+    showTimer = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      tip.querySelector('.part-tooltip-title').textContent = COMP_LABELS[type];
+      tip.querySelector('.part-tooltip-body').textContent = COMP_DESCRIPTIONS[type];
+      // Position to the right of the palette item, vertically centred.
+      const left = r.right + 10;
+      const top = r.top + r.height / 2;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+      tip.classList.add('show');
+    }, 200);
+  }
+
   for (const type of ['cell','battery','switch','bulb','resistor','ammeter','voltmeter']) {
     const el = document.createElement('div');
     el.className = 'part';
     el.draggable = true;
     el.dataset.type = type;
     el.innerHTML = `${paletteIcon(type)}<div class="name">${COMP_LABELS[type]}</div>`;
-    el.addEventListener('dragstart', (ev) => ev.dataTransfer.setData('text/plain', type));
+    el.addEventListener('dragstart', (ev) => { hideTip(); ev.dataTransfer.setData('text/plain', type); });
     el.addEventListener('click', () => addComponent(type, SVG_W/2, SVG_H/2));
+    el.addEventListener('mouseenter', () => showTipFor(el, type));
+    el.addEventListener('mouseleave', hideTip);
+    el.addEventListener('focus', () => showTipFor(el, type));
+    el.addEventListener('blur', hideTip);
     parts.appendChild(el);
   }
   svg.addEventListener('dragover', (ev) => ev.preventDefault());

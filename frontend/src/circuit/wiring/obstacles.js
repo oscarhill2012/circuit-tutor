@@ -3,7 +3,7 @@
 // segment lists that the router treats as avoidables.
 
 import { state } from '../../state/store.js';
-import { COMP } from '../schema.js';
+import { COMP, COMP_SCALE } from '../schema.js';
 import { endpointPos } from '../geometry.js';
 
 export const CLEARANCE = 12;
@@ -15,10 +15,12 @@ export function collectComponentBoxes(excludeIds = []) {
   for (const c of state.components) {
     if (ex.has(c.id)) continue;
     const m = COMP[c.type];
+    const halfW = (m.w * COMP_SCALE) / 2;
+    const halfH = (m.h * COMP_SCALE) / 2;
     out.push({
       id: c.id,
-      x1: c.x - m.w / 2 - CLEARANCE, y1: c.y - m.h / 2 - CLEARANCE,
-      x2: c.x + m.w / 2 + CLEARANCE, y2: c.y + m.h / 2 + CLEARANCE,
+      x1: c.x - halfW - CLEARANCE, y1: c.y - halfH - CLEARANCE,
+      x2: c.x + halfW + CLEARANCE, y2: c.y + halfH + CLEARANCE,
     });
   }
   return out;

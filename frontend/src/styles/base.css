@@ -16,8 +16,29 @@
   --info: #6fb3ff;
   --violet: #b28cff;
   --grid: #1a2440;
+
+  /* Spacing & radius tokens — defined in rem so they scale with the
+     fluid html font-size below. Use these everywhere instead of bare
+     px values for chrome (padding, gap, margin, border-radius). */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1.125rem;
+  --radius-pill: 999px;
 }
 * { box-sizing: border-box; }
+/* Fluid root font-size: ~16px at 1280-wide viewports, ~20px at 4K, with
+   a 15px floor and 20px ceiling. Every chrome dimension is expressed in
+   rem so the whole UI scales as one unit with viewport width. The SVG
+   diagram is independently responsive via its viewBox. */
+html { font-size: clamp(15px, 14px + 0.16vw, 19px); }
 html, body {
   margin: 0; padding: 0; height: 100%;
   background: radial-gradient(1200px 700px at 20% -10%, #182448 0%, var(--bg) 60%) fixed;
@@ -141,7 +162,7 @@ button { font-family: inherit; color: inherit; }
 .comp.tutor-dim { opacity: 0.35; }
 
 /* Scrollbars */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+::-webkit-scrollbar { width: 0.5rem; height: 0.5rem; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 0.25rem; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 ::-webkit-scrollbar-track { background: transparent; }

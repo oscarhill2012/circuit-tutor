@@ -1,35 +1,9 @@
-// Canvas HUD chips, readout panel, tool/toggle buttons, keyboard shortcuts.
+// Readout panel, tool/toggle buttons, keyboard shortcuts.
 
 import { state } from '../state/store.js';
 import { Sel, isValidTool } from '../state/constants.js';
 import { pushHistory, simulate, undo, redo, deleteComponent, deleteWire, clearCircuit, setTool } from '../state/actions.js';
 import { render, svg } from '../circuit/renderer.js';
-
-export function topologyGuess() { return window.Physics.topologyGuess(state.sim); }
-
-export function updateHUD() {
-  const s = state.sim;
-  const stateChip = document.getElementById('circuit-state');
-  if (!s || s.empty) {
-    stateChip.innerHTML = 'Circuit: <b>empty</b>';
-    stateChip.className = 'chip';
-  } else if (!s.ok) {
-    stateChip.innerHTML = 'Circuit: <b>short / error</b>';
-    stateChip.className = 'chip bad';
-  } else if (s.noSource) {
-    stateChip.innerHTML = 'Circuit: <b>no supply</b>';
-    stateChip.className = 'chip warn';
-  } else if (s.isShort) {
-    stateChip.innerHTML = 'Circuit: <b>short circuit — add a bulb or resistor</b>';
-    stateChip.className = 'chip bad';
-  } else if (s.isOpen) {
-    stateChip.innerHTML = 'Circuit: <b>open loop — no current flows</b>';
-    stateChip.className = 'chip warn';
-  } else {
-    stateChip.innerHTML = 'Circuit: <b>live · ' + topologyGuess() + '</b>';
-    stateChip.className = 'chip good';
-  }
-}
 
 export function updateReadout() {
   const s = state.sim;
