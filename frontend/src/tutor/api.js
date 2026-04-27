@@ -14,11 +14,19 @@ const TUTOR_URL = '/api/tutor';
 
 // Context-window caps.
 const HISTORY_TURNS = 4;                 // last N raw turns sent as recent_history
-const HISTORY_CHAR_CAP = 500;            // truncate each history entry's content
+const HISTORY_USER_CHAR_CAP = 500;       // truncate user history content
+const HISTORY_ASSISTANT_CHAR_CAP = 1200; // larger cap so state_summary.next_step survives
 const RETRIEVED_KB_LIMIT = 8;            // top-N retrieved snippets (pinned always sent on top)
 const MAX_COMPONENTS_IN_SNAPSHOT = 40;   // defensive cap for pathological circuits
 const MAX_WIRES_IN_SNAPSHOT = 80;
 const MAX_READINGS_IN_SNAPSHOT = 40;
+
+// A student message that mentions any of these implies they want numbers.
+// When none match, per-component current/drop readings are stripped from
+// the snapshot so the tutor doesn't pre-quote values the student didn't ask
+// for. The simulator still runs locally; we just hide its per-component
+// numerics from the model.
+const NUMERIC_INTENT_RE = /\b(current|voltage|reading|measure|measurement|how much|how many|amps?|amperes?|volts?|ohms?|p\.?d\.?|drop|power|watts?|value|number|[0-9])/i;
 
 // Boundary conversion: the server schema for `selected` is a string — wires
 // are still serialised as `"wire:<id>"` here so the API contract is unchanged.
@@ -27,9 +35,19 @@ function selectionForServer(sel) {
   return sel.kind === SelKind.WIRE ? 'wire:' + sel.id : sel.id;
 }
 
-function circuitSnapshot() {
+function circuitSnapshot(studentMessage) {
+  // When the student's message has no numeric intent, also strip the static
+  // numeric props (`voltage` on cells, `resistance` on resistors). Otherwise
+  // the model can fabricate `I = V/R` calculations on a one-word affirmation
+  // like "ok thanks" — Plan 10 defect #2.
+  const wantsNumbers = NUMERIC_INTENT_RE.test(studentMessage || '');
+  const scrubProps = (props) => {
+    if (wantsNumbers || !props || typeof props !== 'object') return props;
+    const { voltage, resistance, ...rest } = props;
+    return rest;
+  };
   const comps = state.components.slice(0, MAX_COMPONENTS_IN_SNAPSHOT).map(c => ({
-    id: c.id, type: c.type, props: c.props,
+    id: c.id, type: c.type, props: scrubProps(c.props),
   }));
   const epLabel = (ep) => ep.junctionId ? `J:${ep.junctionId}` : `${ep.compId}.${ep.term}`;
   const wires = state.wires.slice(0, MAX_WIRES_IN_SNAPSHOT).map(w => ({
@@ -45,12 +63,14 @@ function circuitSnapshot() {
       status: state.sim.isOpen ? 'open' : (state.sim.isShort ? 'short' : 'live'),
       supplyV: state.sim.supplyV || 0,
       totalI: state.sim.totalI || 0,
-      components: state.sim.elements.slice(0, MAX_READINGS_IN_SNAPSHOT).map(e => ({
+    };
+    if (wantsNumbers) {
+      readings.components = state.sim.elements.slice(0, MAX_READINGS_IN_SNAPSHOT).map(e => ({
         id: e.comp.id,
         current: Number((e.current || 0).toFixed(4)),
         drop: Number((e.drop || 0).toFixed(4)),
-      })),
-    };
+      }));
+    }
   }
   return {
     components: comps,
@@ -62,14 +82,25 @@ function circuitSnapshot() {
   };
 }
 
+// Per-role caps: assistant entries get a larger cap and a `[next_step: ...]`
+// prefix lifted from state_summary.next_step so the next turn's context still
+// retains the planned move even if the rest of the JSON is truncated.
 function truncateHistory(messages) {
   return messages.slice(-HISTORY_TURNS).map(m => {
-    const raw = typeof m.content === 'string'
-      ? m.content
-      : (m.content.assistant_text || JSON.stringify(m.content));
-    const content = raw.length > HISTORY_CHAR_CAP
-      ? raw.slice(0, HISTORY_CHAR_CAP) + '…'
-      : raw;
+    let raw;
+    let cap;
+    if (m.role === 'assistant' && m.content && typeof m.content === 'object') {
+      const nextStep = m.content.state_summary?.next_step?.trim();
+      const body = m.content.assistant_text || JSON.stringify(m.content);
+      raw = nextStep ? `[next_step: ${nextStep}] ${body}` : body;
+      cap = HISTORY_ASSISTANT_CHAR_CAP;
+    } else {
+      raw = typeof m.content === 'string'
+        ? m.content
+        : (m.content?.assistant_text || JSON.stringify(m.content));
+      cap = HISTORY_USER_CHAR_CAP;
+    }
+    const content = raw.length > cap ? raw.slice(0, cap) + '…' : raw;
     return { role: m.role, content };
   });
 }
@@ -89,7 +120,7 @@ function buildUserPayload(studentMessage) {
 
   return {
     student_message: studentMessage,
-    circuit_state: circuitSnapshot(),
+    circuit_state: circuitSnapshot(studentMessage),
     selected: selectionForServer(state.selection),
     current_task: t ? { id: t.id, topic: t.topicId, type: t.type, difficulty: t.difficulty, data: t.data } : null,
     recent_history: recent,
