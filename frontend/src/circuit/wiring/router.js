@@ -21,6 +21,14 @@ const OVERLAP_COST = 240; // penalty per axis-aligned overlap with existing wire
 const NEAR_COST = 3;      // penalty per segment that hugs an obstacle edge
 const REUSE_BONUS = 8;    // reward per segment reused from previous path
 const LANE_STEP = 10;     // offset applied when a cleaner lane is available
+// Just above BEND_COST so the router is willing to "spend a bend" rather
+// than depart srcStub or arrive at tgtStub along the stub axis. Without this
+// penalty, A* often takes a parallel-arrival path of equal-or-lower cost,
+// and simplify() then collapses the mandatory stub corner — leaving the
+// wire's first/last segment shorter than STUB and (downstream) breaking the
+// current-bar geometry gate, plus pushing the wire's terminal segment
+// inside the destination component's clearance box.
+const STUB_PRESERVE_COST = BEND_COST + 1;
 
 // Public API ------------------------------------------------------------
 
@@ -99,8 +107,21 @@ export function route(source, target, opts = {}) {
       const corners = reconstruct(came, curKey);
       return finalize(srcPt, corners, tgtPt, wireSegs, obstacles);
     }
+    // Suppress stub-preservation when src and tgt stubs share an axis: the
+    // natural straight-line collapse is geometrically clean (it can't route
+    // through a component body since both stubs already cleared the source
+    // and target). Forcing a detour here would route the wire across other
+    // wires for no payoff. Detected by comparing srcStub and tgtStub on the
+    // shared coordinate of one or both stub-axes.
+    const stubsCollinear = srcStub && tgtStub && (
+      ((srcDir === 'E' || srcDir === 'W') && (tgtDir === 'E' || tgtDir === 'W') && srcStub.y === tgtStub.y) ||
+      ((srcDir === 'N' || srcDir === 'S') && (tgtDir === 'N' || tgtDir === 'S') && srcStub.x === tgtStub.x)
+    );
+    const ssArg = stubsCollinear ? null : srcStub;
+    const tsArg = stubsCollinear ? null : tgtStub;
     for (const nb of neighbors(cur, xArr, yArr, xIdx, yIdx, obstacles)) {
-      const step = edgeCost(cur, nb, wireSegs, obstacles, prevSet);
+      const step = edgeCost(cur, nb, wireSegs, obstacles, prevSet,
+        ssArg, srcDir, tsArg, tgtDir);
       const nKey = key(nb.x, nb.y, nb.dir);
       const tentative = gScore.get(curKey) + step;
       if (tentative < (gScore.get(nKey) ?? Infinity)) {
@@ -155,7 +176,8 @@ function neighbors(cur, xArr, yArr, xIdx, yIdx, obstacles) {
   return out;
 }
 
-function edgeCost(from, to, wireSegs, obstacles, prevSet) {
+function edgeCost(from, to, wireSegs, obstacles, prevSet,
+                  srcStub, srcDir, tgtStub, tgtDir) {
   const len = Math.abs(from.x - to.x) + Math.abs(from.y - to.y);
   let cost = len;
   if (from.dir && from.dir !== to.dir) cost += BEND_COST;
@@ -165,6 +187,14 @@ function edgeCost(from, to, wireSegs, obstacles, prevSet) {
   }
   if (hugsObstacle(from, to, obstacles)) cost += NEAR_COST * len / 20;
   if (prevSet && prevSet.has(segKey(from, to))) cost -= REUSE_BONUS;
+  // Stub preservation: reject parallel-arrival/departure at the mandatory
+  // STUB-length endpoints. See STUB_PRESERVE_COST.
+  if (srcStub && from.x === srcStub.x && from.y === srcStub.y && to.dir === srcDir) {
+    cost += STUB_PRESERVE_COST;
+  }
+  if (tgtStub && to.x === tgtStub.x && to.y === tgtStub.y && to.dir === tgtDir) {
+    cost += STUB_PRESERVE_COST;
+  }
   return cost;
 }
 

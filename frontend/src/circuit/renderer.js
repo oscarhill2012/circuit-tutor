@@ -9,7 +9,7 @@ import { editor, onCompMouseDown, onTerminalPointerDown } from './editor.js';
 import { deleteWire, deleteComponent, splitWireAtCorner } from '../state/actions.js';
 import { updateReadout } from '../ui/canvas.js';
 import { termPos, endpointPos } from './geometry.js';
-import { route as routePath } from './wiring/router.js';
+import { route as routePath, segOverlap } from './wiring/router.js';
 import { collectComponentBoxes, collectWireSegments } from './wiring/obstacles.js';
 import { toSvgPath, previewPath } from './wiring/path.js';
 
@@ -25,6 +25,9 @@ let compsG = null;
 let termsG = null;
 let previewG = null;
 let wireBarsG = null;
+// DEBUG-OVERLAP — temporary diagnostic layer; remove with the rest of the
+// overlap-debug code once the iter-improv wiring work lands.
+let overlapsG = null;
 
 function clearChildren(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
@@ -80,6 +83,10 @@ export function initRenderer() {
 
   wiresG = svgEl('g', { class: 'wires' });
   svg.appendChild(wiresG);
+  // DEBUG-OVERLAP — sits above wires, below components, so red bands hide
+  // the wire stroke beneath but do not obscure component bodies/labels.
+  overlapsG = svgEl('g', { class: 'wire-overlaps-debug', 'pointer-events': 'none' });
+  svg.appendChild(overlapsG);
   compsG = svgEl('g', { class: 'comps' });
   svg.appendChild(compsG);
   termsG = svgEl('g', { class: 'terms' });
@@ -225,6 +232,9 @@ export function render() {
     (node, info) => updateWireGroup(node, info),
   );
 
+  // DEBUG-OVERLAP — paint collinear sub-segments shared by two wires.
+  renderOverlapsDebug(wireInfos);
+
   // Per-component reconcile: each component owns a stable <g data-cid="..">
   // node. Updates currently rebuild the whole sub-tree (cheapest correct path
   // until label/brightness/meter visuals are split out), but the keyed node
@@ -359,6 +369,54 @@ function updateWireGroup(node, info) {
   }
   if (visible.getAttribute('class') !== cls) visible.setAttribute('class', cls);
   return node;
+}
+
+// DEBUG-OVERLAP — temporary diagnostic. Walks every pair of wire segments
+// and paints any collinear shared span in red so we can see which wires are
+// actually overlapping. Two wires sharing only an endpoint (e.g. at a
+// junction) produce zero-length intersection and are not flagged. Remove
+// this whole helper, the overlapsG layer, and the .wire-debug-overlap CSS
+// once the wire-overlap iter-improv work lands.
+function renderOverlapsDebug(wireInfos) {
+  if (!overlapsG) return;
+  clearChildren(overlapsG);
+  const segs = [];
+  for (const info of wireInfos) {
+    const pts = info.drawPts;
+    for (let i = 1; i < pts.length; i++) {
+      segs.push({ wid: info.w.id, a: pts[i - 1], b: pts[i] });
+    }
+  }
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const s1 = segs[i], s2 = segs[j];
+      if (s1.wid === s2.wid) continue;
+      if (!segOverlap(s1.a, s1.b, s2.a, s2.b)) continue;
+      const span = overlapSpan(s1, s2);
+      if (!span) continue;
+      overlapsG.appendChild(svgEl('line', {
+        class: 'wire-debug-overlap',
+        x1: span.x1, y1: span.y1, x2: span.x2, y2: span.y2,
+      }));
+    }
+  }
+}
+
+function overlapSpan(s1, s2) {
+  // Both segments are axis-aligned and collinear (segOverlap precondition).
+  if (s1.a.x === s1.b.x && s2.a.x === s2.b.x && s1.a.x === s2.a.x) {
+    const lo = Math.max(Math.min(s1.a.y, s1.b.y), Math.min(s2.a.y, s2.b.y));
+    const hi = Math.min(Math.max(s1.a.y, s1.b.y), Math.max(s2.a.y, s2.b.y));
+    if (hi <= lo) return null;
+    return { x1: s1.a.x, y1: lo, x2: s1.a.x, y2: hi };
+  }
+  if (s1.a.y === s1.b.y && s2.a.y === s2.b.y && s1.a.y === s2.a.y) {
+    const lo = Math.max(Math.min(s1.a.x, s1.b.x), Math.min(s2.a.x, s2.b.x));
+    const hi = Math.min(Math.max(s1.a.x, s1.b.x), Math.max(s2.a.x, s2.b.x));
+    if (hi <= lo) return null;
+    return { x1: lo, y1: s1.a.y, x2: hi, y2: s1.a.y };
+  }
+  return null;
 }
 
 function appendHoverDots(g, w, pts) {

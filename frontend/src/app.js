@@ -3,7 +3,7 @@
 // this file only wires up the startup sequence and the starter circuit.
 
 import { state } from './state/store.js';
-import { simulate } from './state/actions.js';
+import { simulate, loadInitialCircuit } from './state/actions.js';
 import { render, initRenderer } from './circuit/renderer.js';
 import { initCanvasInteractions } from './circuit/editor.js';
 import { initPalette } from './ui/palette.js';
@@ -23,6 +23,14 @@ export async function boot() {
   initTaskControls();
   initTutorPanel();
   initDevInspector();
+
+  // DEBUG-OVERLAP — verifier hook for iter-improv Phase 1.
+  // Exposes the bare minimum surface needed to construct deterministic
+  // wire/junction circuits from Playwright. Gated on ?dev=1 so a real student
+  // session never sees it. Remove once the overlap iter-improv work lands.
+  if (typeof location !== 'undefined' && location.search.includes('dev=1')) {
+    window.__circuit = { state, loadInitialCircuit, render, simulate };
+  }
 
   try { await loadTasks(); } catch (err) { console.error('Task load failed:', err); }
 

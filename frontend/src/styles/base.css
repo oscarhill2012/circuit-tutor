@@ -69,6 +69,9 @@ button { font-family: inherit; color: inherit; }
 }
 @keyframes pulse { 0%,100% { r: 5; } 50% { r: 7; } }
 .wire { fill: none; stroke: #7a8bb0; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+/* DEBUG-OVERLAP — temporary diagnostic; remove with the corresponding
+   renderer.js + app.js DEBUG-OVERLAP blocks once wire-overlap fix lands. */
+.wire-debug-overlap { stroke: #ff2a3d; stroke-width: 6; opacity: 0.9; stroke-linecap: butt; pointer-events: none; }
 .wire.selected { stroke: var(--info); stroke-width: 3; }
 .wire.active {
   stroke: var(--accent);

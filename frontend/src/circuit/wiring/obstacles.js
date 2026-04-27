@@ -27,17 +27,21 @@ export function collectComponentBoxes(excludeIds = []) {
 }
 
 // Reconstruct the point sequence of an existing wire, preferring its cached
-// path so the router sees stable geometry during component drag.
+// path so the router sees stable geometry during component drag. Wires
+// without a cached path return null — they are not yet placed anywhere on
+// the canvas, and emitting a straight-line placeholder between endpoints
+// can fabricate phantom obstacle segments that aren't real (e.g. a
+// junction-to-component pseudo-segment that happens to lie on the same row
+// as a wire being routed, triggering OVERLAP_COST against the legitimate
+// straight path while the eventual real route would have bent away).
 export function wirePoints(w) {
   const p0 = endpointPos(w.a);
   const pn = endpointPos(w.b);
   if (!p0 || !pn) return null;
-  if (w.path && w.path.length >= 2) {
-    const pts = w.path.slice();
-    pts[0] = p0; pts[pts.length - 1] = pn;
-    return pts;
-  }
-  return [p0, pn];
+  if (!w.path || w.path.length < 2) return null;
+  const pts = w.path.slice();
+  pts[0] = p0; pts[pts.length - 1] = pn;
+  return pts;
 }
 
 // Flatten every committed wire into its orthogonal segments, so the router
