@@ -2,7 +2,7 @@
 
 import { state } from '../state/store.js';
 import { Sel, isValidTool } from '../state/constants.js';
-import { pushHistory, simulate, undo, redo, deleteComponent, deleteWire, clearCircuit } from '../state/actions.js';
+import { pushHistory, simulate, undo, redo, deleteComponent, deleteWire, clearCircuit, setTool } from '../state/actions.js';
 import { render, svg } from '../circuit/renderer.js';
 
 export function topologyGuess() { return window.Physics.topologyGuess(state.sim); }
@@ -82,15 +82,7 @@ function formatResistance(r) {
 
 export function initTools() {
   document.querySelectorAll('.tools button[data-tool]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const next = btn.dataset.tool;
-      if (!isValidTool(next)) return;
-      state.tool = next;
-      document.querySelectorAll('.tools button[data-tool]').forEach(b => b.classList.toggle('active', b === btn));
-      svg.className.baseVal = 'tool-' + state.tool;
-      state.pendingWire = null;
-      render();
-    });
+    btn.addEventListener('click', () => setTool(btn.dataset.tool));
   });
   // Dev-time check: every tool button in the DOM must map to a known Tool.
   document.querySelectorAll('.tools button[data-tool]').forEach(b => {

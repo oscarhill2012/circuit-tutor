@@ -2,9 +2,9 @@
 // Rendering is triggered by callers via render() after a mutation.
 
 import { state, GRID } from './store.js';
-import { Sel, SelKind } from './constants.js';
+import { Sel, SelKind, Tool, isValidTool } from './constants.js';
 import { COMP, COMP_PREFIX } from '../circuit/schema.js';
-import { render } from '../circuit/renderer.js';
+import { render, svg } from '../circuit/renderer.js';
 
 export function uid(type) {
   const p = COMP_PREFIX[type] || 'X';
@@ -182,11 +182,23 @@ export function splitWireAtCorner(wireId, pt, cornerIndex) {
   return jid;
 }
 
+export function setTool(name) {
+  if (!isValidTool(name)) return;
+  state.tool = name;
+  document.querySelectorAll('.tools button[data-tool]').forEach(b => {
+    b.classList.toggle('active', b.dataset.tool === name);
+  });
+  if (svg) svg.className.baseVal = 'tool-' + state.tool;
+  state.pendingWire = null;
+  render();
+}
+
 export function addComponent(type, x, y) {
   pushHistory();
   const id = uid(type);
   const props = { ...(COMP[type].defaultProps || {}) };
   state.components.push({ id, type, x: snap(x), y: snap(y), props });
   state.selection = Sel.component(id);
+  setTool(Tool.SELECT);
   simulate(); render();
 }
