@@ -1,13 +1,15 @@
 """Vercel Python serverless function: /api/tutor.
 
 Accepts POST {student_message, circuit_state, selected, current_task,
-recent_history, knowledge_snippets, rolling_summary}, runs circuit_validator
-server-side so the AI's grounding context is authoritative (not whatever the
-client sent), then calls OpenAI and returns the structured JSON reply.
+recent_history, rolling_summary}, runs circuit_validator server-side so the
+AI's grounding context is authoritative (not whatever the client sent),
+retrieves relevant KB snippets server-side, then calls OpenAI and returns
+the structured JSON reply.
 
-The server ALWAYS injects the pinned safeguarding + foundational physics
-entries from knowledge_base.json into knowledge_snippets (belt-and-braces:
-even if a tampered client sent an empty list, the model still sees them).
+Knowledge-base retrieval runs entirely on the server (knowledge_base.json is
+the single source of truth). The client never sends `knowledge_snippets`;
+this prevents a tampered client from feeding the model arbitrary "facts" and
+removes the JS/JSON mirror that previously had to be kept in sync.
 
 Env vars:
   OPENAI_API_KEY   required; set in the Vercel project settings.
@@ -52,9 +54,107 @@ except Exception as _exc:  # noqa: BLE001
     _KB_LOAD_ERROR = f"{type(_exc).__name__}: {_exc}"
 
 # Lookup so triage can hoist a suggested KB entry into the model's context
-# even when client-side retrieval missed it.
+# even when retrieval missed it.
 _KB_BY_ID = {e.get("id"): e for e in (_PINNED + _ENTRIES) if isinstance(e, dict) and e.get("id")}
 _RETRIEVED_KB_LIMIT = 8
+
+
+# --- Retrieval (term-overlap + role balance) --------------------------------
+# Cheap bag-of-words ranker over the curated KB. Scoring on ~50 entries is
+# microseconds, so this runs every turn against the student message + the
+# current task topic. Post-processing guarantees a mix of roles in the
+# returned list (one hint_seed, one misconception when relevant) so coaching
+# turns aren't drowned in declarative entries.
+_STOP_WORDS = frozenset((
+    "the", "a", "an", "is", "it", "to", "of", "and", "or", "in", "on", "at",
+    "for", "with", "how", "what", "why", "do", "does", "i", "my", "me", "can",
+    "be", "as", "if", "this", "that", "are", "was", "were", "will", "would",
+    "should", "could", "have", "has", "had", "not", "no", "yes", "but", "so",
+    "you", "your", "we", "us", "they", "them", "their", "there", "here",
+))
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _tokens(s):
+    if not s:
+        return []
+    return [t for t in _TOKEN_RE.findall(str(s).lower())
+            if len(t) > 1 and t not in _STOP_WORDS]
+
+
+# Pre-tokenise each entry's haystack once at import time. Retrieval runs on
+# every tutor turn; per-call retokenising is wasted work.
+_ENTRY_HAYSTACKS = []
+for _e in _ENTRIES:
+    if not isinstance(_e, dict):
+        continue
+    hay = set(_tokens(_e.get("fact", "")))
+    for _tag in (_e.get("tags") or []):
+        hay.add(str(_tag).lower())
+    _topic = _e.get("topic")
+    if _topic:
+        hay.add(str(_topic).lower())
+    _ENTRY_HAYSTACKS.append((_e, hay, str(_topic).lower() if _topic else ""))
+
+
+def _retrieve(query, topic=None, limit=_RETRIEVED_KB_LIMIT):
+    """Rank ENTRIES by term overlap against the query plus optional topic hint.
+
+    Mirrors the post-processing of the JS implementation: guarantees one
+    hint_seed (highest-scoring, even if score 0) and one misconception (only
+    when it scored > 0) in the returned list, replacing the lowest-scored
+    definition/rule entry to keep the slot count steady. This breaks the
+    bag-of-words bias toward declarative entries.
+    """
+    q_tokens = set(_tokens(query))
+    topic_lc = str(topic).lower() if topic else ""
+    if topic_lc:
+        q_tokens.add(topic_lc)
+
+    scored = []
+    for entry, hay, entry_topic in _ENTRY_HAYSTACKS:
+        if not q_tokens:
+            score = 0
+        else:
+            score = sum(1 for t in q_tokens if t in hay)
+            if topic_lc and entry_topic == topic_lc:
+                score += 2
+        scored.append((score, entry))
+    scored.sort(key=lambda s: s[0], reverse=True)
+
+    top = [e for s, e in scored if s > 0][:limit]
+    if len(top) < min(limit, 3):
+        top = [e for _, e in scored[:limit]] if scored else []
+        # Fallback to first N entries when nothing matched at all.
+        if not any(s > 0 for s, _ in scored):
+            top = [e for e, _, _ in _ENTRY_HAYSTACKS[:limit]]
+
+    in_top_ids = {e.get("id") for e in top if isinstance(e, dict)}
+    best_hint = next((e for s, e in scored if e.get("role") == "hint_seed"), None)
+    best_misc = next((e for s, e in scored if e.get("role") == "misconception" and s > 0), None)
+
+    def _ensure(entry):
+        if not entry or entry.get("id") in in_top_ids:
+            return
+        if len(top) < limit:
+            top.append(entry)
+            in_top_ids.add(entry.get("id"))
+            return
+        # Replace the lowest-scored definition/rule entry to preserve slot count.
+        for i in range(len(top) - 1, -1, -1):
+            r = top[i].get("role")
+            if r in ("definition", "rule"):
+                top[i] = entry
+                in_top_ids.add(entry.get("id"))
+                return
+        top[-1] = entry
+        in_top_ids.add(entry.get("id"))
+
+    if best_hint:
+        _ensure(best_hint)
+    if best_misc:
+        _ensure(best_misc)
+    return top
 
 
 # Context-window budget. ~4 chars ≈ 1 token (rough). 12k chars ≈ 3k tokens.
@@ -184,11 +284,11 @@ def _safe_fallback(reason):
     }
 
 
-def _inject_pinned(client_snippets):
-    """Always put pinned safeguarding entries at the top, de-duplicating by id.
+def _prepend_pinned(retrieved):
+    """Put pinned safeguarding entries at the top, de-duplicating by id.
 
-    Belt-and-braces: even if the client omits or tampers with safeguarding,
-    the model still receives the full pinned core from the server-side KB.
+    Pinned entries always reach the model regardless of the retrieval result;
+    `retrieved` is whatever `_retrieve()` returned for this turn.
     """
     seen = set()
     merged = []
@@ -197,7 +297,7 @@ def _inject_pinned(client_snippets):
         if eid and eid not in seen:
             seen.add(eid)
             merged.append(entry)
-    for entry in (client_snippets or []):
+    for entry in (retrieved or []):
         eid = entry.get("id") if isinstance(entry, dict) else None
         if eid and eid in seen:
             continue
@@ -442,14 +542,36 @@ def _build_user_payload(req, analysis, teaching_focus, must_refuse=False, direct
     }, ensure_ascii=False)
 
 
-def _call_openai(user_payload, system_prompt):
+# OpenAI client reused across requests so warm invocations skip the
+# httpx/connection-pool rebuild (~150-400 ms saved per call). Lazily
+# constructed on first need so a missing API key still returns a clean
+# fallback rather than blowing up at import time.
+_openai_client = None
+# Cache the first successful kwargs combo (max_tokens vs max_completion_tokens,
+# whether the model accepts a custom temperature). Subsequent calls reuse it
+# and skip the param-rejection retry loop. Reset to None on the next cold start.
+_OPENAI_CALL_KWARGS = None
+_COMPLETION_TOKEN_CAP = 400
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is not None:
+        return _openai_client, None
     if OpenAI is None:
-        return _safe_fallback(f"OpenAI SDK not importable: {_OPENAI_IMPORT_ERROR}")
+        return None, f"OpenAI SDK not importable: {_OPENAI_IMPORT_ERROR}"
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        return _safe_fallback("OPENAI_API_KEY not configured on the server.")
+        return None, "OPENAI_API_KEY not configured on the server."
+    _openai_client = OpenAI(api_key=api_key)
+    return _openai_client, None
 
-    client = OpenAI(api_key=api_key)
+
+def _call_openai(user_payload, system_prompt):
+    global _OPENAI_CALL_KWARGS
+    client, err = _get_openai_client()
+    if client is None:
+        return _safe_fallback(err)
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
     common = {
@@ -463,20 +585,36 @@ def _call_openai(user_payload, system_prompt):
 
     # Newer OpenAI models (gpt-4.1+, o-series) reject `max_tokens` and require
     # `max_completion_tokens`; older ones (gpt-4o-mini, gpt-3.5-*) reject the
-    # new param. Some reasoning models also reject custom `temperature`. Be
-    # tolerant of both regimes by retrying on TypeError / BadRequestError.
-    def _create(**extra):
-        return client.chat.completions.create(**common, **extra)
+    # new param. Some reasoning models also reject custom `temperature`. Try
+    # the cached combo first; on failure fall back to the full retry loop and
+    # re-cache the first one that works.
+    fallback_kwargs = (
+        {"temperature": 0.3, "max_completion_tokens": _COMPLETION_TOKEN_CAP},
+        {"temperature": 0.3, "max_tokens": _COMPLETION_TOKEN_CAP},
+        {"max_completion_tokens": _COMPLETION_TOKEN_CAP},
+        {"max_tokens": _COMPLETION_TOKEN_CAP},
+    )
+    candidates = []
+    if _OPENAI_CALL_KWARGS is not None:
+        candidates.append(_OPENAI_CALL_KWARGS)
+    candidates.extend(fallback_kwargs)
+    # Drop duplicates while preserving order so the cached combo isn't retried
+    # again at the bottom of the loop.
+    seen_keys = set()
+    unique_candidates = []
+    for k in candidates:
+        key = tuple(sorted(k.items()))
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        unique_candidates.append(k)
 
     last_exc = None
-    for kwargs in (
-        {"temperature": 0.3, "max_completion_tokens": 600},
-        {"temperature": 0.3, "max_tokens": 600},
-        {"max_completion_tokens": 600},
-        {"max_tokens": 600},
-    ):
+    resp = None
+    for kwargs in unique_candidates:
         try:
-            resp = _create(**kwargs)
+            resp = client.chat.completions.create(**common, **kwargs)
+            _OPENAI_CALL_KWARGS = kwargs
             break
         except TypeError as exc:
             last_exc = exc
@@ -488,7 +626,7 @@ def _call_openai(user_payload, system_prompt):
                 last_exc = exc
                 continue
             raise
-    else:
+    if resp is None:
         return _safe_fallback(f"OpenAI param-mismatch: {last_exc}")
 
     raw = resp.choices[0].message.content or "{}"
@@ -552,9 +690,17 @@ class handler(BaseHTTPRequestHandler):
             self._respond(400, _safe_fallback("Bad request body."))
             return
 
-        # Server-side safeguards on the payload: pinned safeguarding is always
-        # present; token budget trims retrievable snippets / history if needed.
-        req["knowledge_snippets"] = _inject_pinned(req.get("knowledge_snippets"))
+        # Server-side retrieval: knowledge_base.json is the single source of
+        # truth and the client never sends `knowledge_snippets`. Pinned
+        # safeguarding is always prepended; the token budget trims retrievable
+        # snippets / history if needed.
+        student_message = req.get("student_message", "")
+        task_topic = None
+        ct = req.get("current_task")
+        if isinstance(ct, dict):
+            task_topic = ct.get("topic")
+        retrieved = _retrieve(student_message, topic=task_topic)
+        req["knowledge_snippets"] = _prepend_pinned(retrieved)
         req = _apply_budget(req)
 
         circuit_state = req.get("circuit_state") or {}

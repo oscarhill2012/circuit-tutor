@@ -25,15 +25,16 @@ STRUCTURE
     src/
       data/
         tasks.json            - Ordered task list (edit to add/remove tasks)
-        knowledgeBase.js      - Curated GCSE KB + pinned safeguarding (client retrieval)
       sim/physics.js          - Client-side physics simulation
       tasks/engine.js         - Task card renderer
       tutor/api.js            - Tutor HTTP client (posts to /api/tutor)
       circuit/ state/ ui/     - Editor, renderer, state store, panels
     api/
-      tutor.py                - Vercel serverless function (AI tutor endpoint)
+      tutor.py                - Vercel serverless function (AI tutor endpoint).
+                                Loads knowledge_base.json and runs retrieval
+                                server-side; client never sends KB snippets.
       circuit_validator.py    - Server-side circuit analysis (grounding)
-      knowledge_base.json     - KB loaded by tutor.py; mirrors knowledgeBase.js
+      knowledge_base.json     - Curated GCSE KB; single source of truth
     vercel.json              - Vercel deployment config
     requirements.txt         - Python dependencies for serverless functions
 

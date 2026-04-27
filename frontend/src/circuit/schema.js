@@ -1,6 +1,7 @@
 // Component geometry + display metadata used by the canvas, editor and
 // palette. Task content lives in frontend/src/data/tasks.json and the
-// GCSE knowledge base lives in frontend/src/data/knowledgeBase.js.
+// GCSE knowledge base lives in frontend/api/knowledge_base.json (server-only;
+// retrieval runs in tutor.py).
 
 export const COMP = {
   cell:      { w: 60, h: 40, terms: [{n:'+', x:-30, y:0}, {n:'-', x:30, y:0}], defaultProps: { voltage: 6 } },

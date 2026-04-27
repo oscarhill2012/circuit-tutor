@@ -5,6 +5,7 @@ __pycache__/
 .vercel
 node_modules/
 graphify-out/
+.graphify*
 plans/
 .vercel
 .env*.local

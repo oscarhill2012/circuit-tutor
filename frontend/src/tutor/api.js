@@ -1,13 +1,16 @@
 // Tutor HTTP client: builds the payload sent to /api/tutor (server-side key),
 // handles thinking/assistant message plumbing, and applies visual highlights
 // from the tutor's visual_instructions array.
+//
+// KB retrieval runs server-side — see frontend/api/tutor.py. The client sends
+// the student message + circuit state and the server retrieves relevant KB
+// snippets against the canonical knowledge_base.json.
 
 import { state } from '../state/store.js';
 import { SelKind } from '../state/constants.js';
 import { applyVisualInstructions } from '../circuit/renderer.js';
 import { getActiveTask } from '../tasks/engine.js';
 import { pushUserMsg, appendThinking, removeThinking, appendTutorMsg } from '../ui/tutorPanel.js';
-import { PINNED, retrieve } from '../data/knowledgeBase.js';
 import { isDevMode, captureRequest, captureResponse, captureError } from './devInspector.js';
 
 const TUTOR_URL = '/api/tutor';
@@ -15,8 +18,7 @@ const TUTOR_URL = '/api/tutor';
 // Context-window caps.
 const HISTORY_TURNS = 4;                 // last N raw turns sent as recent_history
 const HISTORY_USER_CHAR_CAP = 500;       // truncate user history content
-const HISTORY_ASSISTANT_CHAR_CAP = 1200; // larger cap so state_summary.next_step survives
-const RETRIEVED_KB_LIMIT = 8;            // top-N retrieved snippets (pinned always sent on top)
+const HISTORY_ASSISTANT_CHAR_CAP = 500;  // prose-only assistant turns; next_step prefix fits comfortably
 const MAX_COMPONENTS_IN_SNAPSHOT = 40;   // defensive cap for pathological circuits
 const MAX_WIRES_IN_SNAPSHOT = 80;
 const MAX_READINGS_IN_SNAPSHOT = 40;
@@ -82,22 +84,23 @@ function circuitSnapshot(studentMessage) {
   };
 }
 
-// Per-role caps: assistant entries get a larger cap and a `[next_step: ...]`
-// prefix lifted from state_summary.next_step so the next turn's context still
-// retains the planned move even if the rest of the JSON is truncated.
+// Compress assistant turns to prose only (assistant_text + a `[next_step: …]`
+// prefix lifted from state_summary.next_step) so the model isn't re-reading
+// its own prior structured JSON every turn. Continuity comes from
+// rolling_summary; the next_step prefix preserves the planned move.
 function truncateHistory(messages) {
   return messages.slice(-HISTORY_TURNS).map(m => {
     let raw;
     let cap;
     if (m.role === 'assistant' && m.content && typeof m.content === 'object') {
       const nextStep = m.content.state_summary?.next_step?.trim();
-      const body = m.content.assistant_text || JSON.stringify(m.content);
+      const body = m.content.assistant_text || '';
       raw = nextStep ? `[next_step: ${nextStep}] ${body}` : body;
       cap = HISTORY_ASSISTANT_CHAR_CAP;
     } else {
       raw = typeof m.content === 'string'
         ? m.content
-        : (m.content?.assistant_text || JSON.stringify(m.content));
+        : (m.content?.assistant_text || '');
       cap = HISTORY_USER_CHAR_CAP;
     }
     const content = raw.length > cap ? raw.slice(0, cap) + '…' : raw;
@@ -109,22 +112,15 @@ function buildUserPayload(studentMessage) {
   const t = getActiveTask();
   const recent = truncateHistory(state.messages);
 
-  // Pinned safeguarding + foundational rules are ALWAYS sent on every turn.
-  // Retrieved snippets are ranked per-turn against the student's message and
-  // current task topic.
-  const retrieved = retrieve(studentMessage, {
-    topic: t ? t.topicId : null,
-    limit: RETRIEVED_KB_LIMIT,
-  });
-  const knowledge_snippets = [...PINNED, ...retrieved];
-
+  // KB retrieval runs server-side against knowledge_base.json so the client
+  // payload no longer carries `knowledge_snippets`. The server uses
+  // student_message + current_task.topic for ranking.
   return {
     student_message: studentMessage,
     circuit_state: circuitSnapshot(studentMessage),
     selected: selectionForServer(state.selection),
     current_task: t ? { id: t.id, topic: t.topicId, type: t.type, difficulty: t.difficulty, data: t.data } : null,
     recent_history: recent,
-    knowledge_snippets,
     rolling_summary: state.rollingSummary || '',
   };
 }
@@ -134,7 +130,7 @@ function buildUserPayload(studentMessage) {
 // for a short debounce and then send them to the tutor as a single
 // combined student_message. Recent history already carries each individual
 // turn as context, so the tutor sees them one-by-one as well.
-const DEBOUNCE_MS = 450;
+const DEBOUNCE_MS = 200;
 let pendingRequest = null;  // Promise while a fetch is in flight
 let queued = [];            // Student messages waiting to be sent
 let debounceTimer = null;
