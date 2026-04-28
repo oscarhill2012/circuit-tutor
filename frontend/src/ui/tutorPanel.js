@@ -11,6 +11,27 @@ import {
 } from '../tasks/engine.js';
 import { askTutor } from '../tutor/api.js';
 
+// Persona-state helper: drives the Professor Volt portrait's animated ring
+// (idle / thinking / speaking / error). The visual ring lives in CSS via
+// `[data-state="…"]`; this function flips the attribute and the status text
+// underneath. Tutor api.js calls it via the appendThinking / appendTutorMsg
+// path so the avatar visibly reacts to every tutor turn.
+let _personaResetTimer = null;
+export function setPersonaState(state, label) {
+  const personaEl = document.querySelector('.persona-avatar');
+  const statusEl  = document.getElementById('persona-status');
+  if (!personaEl) return;
+  personaEl.dataset.state = state;
+  if (statusEl && label) statusEl.textContent = label;
+}
+function schedulePersonaReset(delayMs) {
+  clearTimeout(_personaResetTimer);
+  _personaResetTimer = setTimeout(
+    () => setPersonaState('idle', 'Watching the bench'),
+    delayMs
+  );
+}
+
 // Hard cap on in-memory chat length. Prevents unbounded growth of
 // state.messages and the #messages DOM, which would otherwise slowly
 // lag the panel and bloat memory on long sessions. The tutor API
@@ -36,6 +57,10 @@ export function clearChat() {
 }
 
 export function pushUserMsg(text) {
+  // First real exchange — drop the cold-open greeting bubble so the chat
+  // doesn't grow stale.
+  const greet = document.getElementById('volt-greeting');
+  if (greet) greet.remove();
   state.messages.push({ role: 'user', content: text });
   const m = document.createElement('div');
   m.className = 'msg user-msg';
@@ -54,6 +79,8 @@ export function appendThinking() {
   m.textContent = 'Professor Volt is thinking…';
   document.getElementById('messages').appendChild(m);
   scrollMsgs();
+  setPersonaState('thinking', 'Thinking…');
+  clearTimeout(_personaResetTimer);
   return id;
 }
 
@@ -97,6 +124,15 @@ export function appendTutorMsg(payload) {
   document.getElementById('messages').appendChild(m);
   trimChatIfTooLong();
   scrollMsgs();
+  // React on the avatar: refusals → brief error flash; everything else →
+  // speaking ring while the student reads, then ease back to idle.
+  if (payload.reply_type === 'refusal') {
+    setPersonaState('error', 'Hmm, try again');
+    schedulePersonaReset(1800);
+  } else {
+    setPersonaState('speaking', 'Explaining');
+    schedulePersonaReset(2200);
+  }
 }
 
 function renderWithKatex(text) {
