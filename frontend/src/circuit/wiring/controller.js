@@ -101,9 +101,6 @@ export function createWireInteractionController({ validator, onCommit, onChange,
   }
 
   return {
-    getStatus: () => status,
-    getPending: () => pending,
-    getInvalidHover: () => invalidHover,
     onConnectorClick,
     onCanvasClick,
     onEscape,

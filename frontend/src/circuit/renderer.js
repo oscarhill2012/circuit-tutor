@@ -12,6 +12,7 @@ import { termPos, endpointPos } from './geometry.js';
 import { route as routePath, segOverlap } from './wiring/router.js';
 import { collectComponentBoxes, collectWireSegments } from './wiring/obstacles.js';
 import { toSvgPath, previewPath } from './wiring/path.js';
+import { isDevMode } from '../tutor/devInspector.js';
 
 export const svg = document.getElementById('canvas');
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -201,6 +202,18 @@ export function render() {
   // changes (selected / active / reverse) mutate the existing path, and only
   // path-shape changes trigger a node replacement.
   const draggingComp = editor.dragging ? editor.dragging.compId : null;
+  const showCurrent = state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen && state.toggles.current;
+  // Build the set of "live" sim nodes once per render so per-wire active
+  // detection is O(1) instead of O(elements).
+  const liveNodes = showCurrent ? new Set() : null;
+  if (showCurrent) {
+    for (const e of state.sim.elements) {
+      if (Math.abs(e.current) > 1e-4) {
+        if (e.na !== undefined) liveNodes.add(e.na);
+        if (e.nb !== undefined) liveNodes.add(e.nb);
+      }
+    }
+  }
   const wireInfos = [];
   for (const w of state.wires) {
     // During a drag, route the live wires without writing to w.path so a
@@ -211,10 +224,9 @@ export function render() {
     if (!fullPts || fullPts.length < 2) continue;
     let cls = 'wire';
     if (Sel.matches(state.selection, SelKind.WIRE, w.id)) cls += ' selected';
-    if (state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen && state.toggles.current) {
+    if (showCurrent) {
       const nodeA = state.sim.getNodeByEp ? state.sim.getNodeByEp(w.a) : state.sim.getNode(w.a.compId, w.a.term);
-      const anyCurrent = state.sim.elements.some(e => (e.na===nodeA||e.nb===nodeA) && Math.abs(e.current) > 1e-4);
-      if (anyCurrent) {
+      if (liveNodes.has(nodeA)) {
         cls += ' active';
         const nodeB = state.sim.getNodeByEp ? state.sim.getNodeByEp(w.b) : state.sim.getNode(w.b.compId, w.b.term);
         const Va = state.sim.nodes && nodeA !== undefined ? state.sim.nodes[nodeA] : undefined;
@@ -371,15 +383,12 @@ function updateWireGroup(node, info) {
   return node;
 }
 
-// DEBUG-OVERLAP — temporary diagnostic. Walks every pair of wire segments
-// and paints any collinear shared span in red so we can see which wires are
-// actually overlapping. Two wires sharing only an endpoint (e.g. at a
-// junction) produce zero-length intersection and are not flagged. Remove
-// this whole helper, the overlapsG layer, and the .wire-debug-overlap CSS
-// once the wire-overlap iter-improv work lands.
+// DEBUG-OVERLAP — diagnostic only. Gated on dev mode so the O(N^2) segment-pair
+// scan never runs in normal student sessions.
 function renderOverlapsDebug(wireInfos) {
   if (!overlapsG) return;
   clearChildren(overlapsG);
+  if (!isDevMode()) return;
   const segs = [];
   for (const info of wireInfos) {
     const pts = info.drawPts;
@@ -496,7 +505,7 @@ export function renderComponent(c) {
     g.appendChild(svgEl('rect', { class:'fill', x:-20, y:-10, width:40, height:20, rx:2 }));
     g.appendChild(svgEl('line', { class:'body', x1:20, y1:0, x2:40, y2:0 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 10, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
+      g.appendChild(svgEl('text', { x:0, y: 4, 'text-anchor':'middle', class:'val r' }, `${Math.round(c.props.resistance)}Ω`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 4, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'bulb') {
@@ -511,7 +520,6 @@ export function renderComponent(c) {
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:-9, x2:9, y2:9 }));
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:9, x2:9, y2:-9 }));
     if (state.toggles.labels) {
-      g.appendChild(svgEl('text', { x:0, y: bh/2 + 10, 'text-anchor':'middle', class:'val r' }, `${Number(c.props.resistance).toFixed(2)} Ω`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 8, 'text-anchor':'middle', class:'label' }, c.id));
     }
   } else if (c.type === 'ammeter' || c.type === 'voltmeter') {
@@ -522,8 +530,8 @@ export function renderComponent(c) {
     g.appendChild(svgEl('text', { x:0, y:4, 'text-anchor':'middle', class:'label', 'font-size': 10 }, isA ? 'A' : 'V'));
 
     // Digital LCD-style readout sitting just above the meter (upright).
-    let digits = '- - . - -';
     const unit = isA ? 'A' : 'V';
+    let digits = '0.00';
     if (simEl && state.sim && state.sim.ok && !state.sim.empty && !state.sim.isShort) {
       const raw = isA ? Math.abs(simEl.current) : Math.abs(simEl.drop);
       digits = raw < 10 ? raw.toFixed(2) : raw.toFixed(1);
@@ -537,12 +545,7 @@ export function renderComponent(c) {
       x: lcdW/2 - 4, y: lcdY + lcdH - 5,
       'text-anchor': 'end',
       class: 'meter-lcd-text' + (isA ? '' : ' v'),
-    }, digits));
-    g.appendChild(svgEl('text', {
-      x: -lcdW/2 + 4, y: lcdY + lcdH - 5,
-      class: 'meter-lcd-text' + (isA ? '' : ' v'),
-      'font-size': 10,
-    }, unit));
+    }, digits + unit));
 
     if (state.toggles.labels) {
       g.appendChild(svgEl('text', { x:0, y: bh/2 + 18, 'text-anchor':'middle', class:'label' }, c.id));
@@ -560,13 +563,19 @@ export function renderComponent(c) {
     && state.sim && state.sim.ok && !state.sim.isShort
     && state.toggles.voltage && state.sim.supplyV > 0;
   if (showVBar) {
-    const barLen = 64, barT = 7;
-    const yBase = bh / 2 + 14;
+    const barLen = BAR_LEN_LOCAL, barT = BAR_T_LOCAL;
+    // Fixed local-space yBase across every V-bar component, so resistor and
+    // bulb V-bars share one absolute offset (≥10px below the largest body).
+    const yBase = 24;
     const vfrac = Math.min(1, Math.abs(simEl.drop) / state.sim.supplyV);
     g.appendChild(svgEl('rect', { class:'vbar-bg', x:-barLen/2, y: yBase, width: barLen, height: barT, rx:2 }));
     g.appendChild(svgEl('rect', { class:'vbar-fg', x:-barLen/2, y: yBase, width: barLen*vfrac, height: barT, rx:2 }));
-    g.appendChild(svgEl('text', { x: -barLen/2 - 4, y: yBase + barT - 1, 'text-anchor':'end', class:'bar-label v' }, 'V'));
-    g.appendChild(svgEl('text', { x: barLen/2 + 4, y: yBase + barT - 1, class:'bar-label v' }, `${Math.abs(simEl.drop).toFixed(2)}V`));
+    g.appendChild(svgEl('text', {
+      x: barLen/2 + 4, y: yBase + barT/2,
+      'dominant-baseline': 'middle',
+      style: `font-size: ${BAR_LABEL_LOCAL_PX}px`,
+      class: 'bar-label v',
+    }, `${Math.abs(simEl.drop).toFixed(2)}V`));
   }
 
   return g;
@@ -576,7 +585,11 @@ export function renderComponent(c) {
 // end). Implemented by DFS through wires and junctions from the far end of
 // `wire`, collecting component terminals reached (without crossing J), then
 // summing the signed current each of them draws out of the MNA node.
-function kclCurrentThroughWire(j, wire) {
+//
+// `junctionAdj` is a precomputed Map<junctionId, wire[]> shared by all
+// junction bars on the same render pass — avoids O(W) `state.wires` scans
+// per junction step.
+function kclCurrentThroughWire(j, wire, junctionAdj) {
   if (!state.sim || !state.sim.ok) return 0;
   const startEp = (wire.a.junctionId === j.id) ? wire.b : wire.a;
   const visitedWires = new Set([wire.id]);
@@ -589,10 +602,11 @@ function kclCurrentThroughWire(j, wire) {
     if (ep.junctionId) {
       if (visitedJunctions.has(ep.junctionId)) continue;
       visitedJunctions.add(ep.junctionId);
-      for (const w of state.wires) {
+      const adjWires = junctionAdj.get(ep.junctionId) || [];
+      for (const w of adjWires) {
         if (visitedWires.has(w.id)) continue;
-        if (w.a.junctionId === ep.junctionId) { visitedWires.add(w.id); stack.push(w.b); }
-        else if (w.b.junctionId === ep.junctionId) { visitedWires.add(w.id); stack.push(w.a); }
+        visitedWires.add(w.id);
+        stack.push(w.a.junctionId === ep.junctionId ? w.b : w.a);
       }
     } else {
       terminals.push(ep);
@@ -606,6 +620,31 @@ function kclCurrentThroughWire(j, wire) {
     sum += (isPositiveTerm ? 1 : -1) * (el.current || 0);
   }
   return sum;
+}
+
+// Build Map<junctionId, wire[]> and Map<"compId.term", wire> for one render
+// pass. Both are O(W); each consumer would otherwise rescan state.wires per
+// lookup (junction iter: O(J*W); component bar iter: O(C*T*W)).
+function buildWireIndices() {
+  const junctionAdj = new Map();
+  const compTermWire = new Map();
+  for (const w of state.wires) {
+    if (w.a.junctionId) {
+      let arr = junctionAdj.get(w.a.junctionId);
+      if (!arr) { arr = []; junctionAdj.set(w.a.junctionId, arr); }
+      arr.push(w);
+    } else if (w.a.compId) {
+      compTermWire.set(w.a.compId + '.' + w.a.term, w);
+    }
+    if (w.b.junctionId) {
+      let arr = junctionAdj.get(w.b.junctionId);
+      if (!arr) { arr = []; junctionAdj.set(w.b.junctionId, arr); }
+      arr.push(w);
+    } else if (w.b.compId) {
+      compTermWire.set(w.b.compId + '.' + w.b.term, w);
+    }
+  }
+  return { junctionAdj, compTermWire };
 }
 
 // ---------------------------------------------------------------------------
@@ -628,8 +667,17 @@ function kclCurrentThroughWire(j, wire) {
 // ---------------------------------------------------------------------------
 
 const COMP_BAR_TYPES = new Set(['cell', 'battery', 'resistor', 'bulb']);
-const BAR_LEN = 64;          // length along the wire (matches voltage bar)
-const BAR_T = 7;             // thickness perpendicular to the wire (matches voltage bar)
+// Shared bar dimensions in component-local space — voltage bar uses these
+// directly (auto-scaled by the comp's scale(COMP_SCALE) transform), current bar
+// multiplies by COMP_SCALE so both render at the same world-space size at any
+// COMP_SCALE setting. Same coupling for the bar-label font size: V-label
+// divides by COMP_SCALE to compensate for being inside the scaled group.
+const BAR_LEN_LOCAL = 54;
+const BAR_T_LOCAL = 6;
+const BAR_LEN = BAR_LEN_LOCAL * COMP_SCALE;
+const BAR_T = BAR_T_LOCAL * COMP_SCALE;
+const BAR_LABEL_WORLD_PX = 12;
+const BAR_LABEL_LOCAL_PX = BAR_LABEL_WORLD_PX / COMP_SCALE;
 const TERMINAL_GAP = 24;     // breathing space between terminal and bar
 const POST_BAR_GAP = 24;     // space between bar end and next 90° turn
 
@@ -640,6 +688,8 @@ function planWireBars() {
   if (!state.sim || !state.sim.ok || state.sim.empty || state.sim.isOpen || state.sim.isShort) return bars;
   if (!state.toggles.current) return bars;
 
+  const { junctionAdj, compTermWire } = buildWireIndices();
+
   const claim = (wid, atStart, info) => {
     let entry = bars.get(wid);
     if (!entry) { entry = {}; bars.set(wid, entry); }
@@ -648,10 +698,9 @@ function planWireBars() {
 
   // 1) Junction bars on every wire of every ≥3-way junction.
   for (const j of state.junctions) {
-    const attached = state.wires.filter(w =>
-      w.a.junctionId === j.id || w.b.junctionId === j.id);
+    const attached = junctionAdj.get(j.id) || [];
     if (attached.length < 3) continue;
-    const stubs = attached.map(w => ({ wire: w, I: kclCurrentThroughWire(j, w) }));
+    const stubs = attached.map(w => ({ wire: w, I: kclCurrentThroughWire(j, w, junctionAdj) }));
     // Kirchhoff: total current arriving at the junction = sum of out-flows
     // = (sum of |branch currents|) / 2. Use that as the denominator so
     // smaller branches read as obviously not-full.
@@ -672,9 +721,7 @@ function planWireBars() {
     // Sort terminals by x descending so the rightmost is tried first.
     const terms = [...COMP[c.type].terms].sort((a, b) => b.x - a.x);
     for (const t of terms) {
-      const wire = state.wires.find(w =>
-        (w.a.compId === c.id && w.a.term === t.n) ||
-        (w.b.compId === c.id && w.b.term === t.n));
+      const wire = compTermWire.get(c.id + '.' + t.n);
       if (!wire) continue;
       const existing = bars.get(wire.id);
       if (existing && (existing.start || existing.end)) continue; // claimed by junction
@@ -776,6 +823,7 @@ function buildWireBar(item) {
     'data-role': 'label',
     x: geom.labelX, y: geom.labelY,
     'text-anchor': geom.labelAnchor,
+    style: `font-size: ${BAR_LABEL_WORLD_PX}px`,
     class: 'bar-label i',
   }, geom.label));
   return g;

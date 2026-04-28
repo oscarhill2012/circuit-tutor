@@ -1,5 +1,5 @@
 {
-  "_doc": "Ordered list of Circuit Tutor tasks. Each task has: id, type (measure|problem|scenario|exploration), topicId, topicName, difficulty, data. Measure tasks pre-load a scaffold circuit with locked component ids. Edit this file to add/remove/reorder tasks.",
+  "_doc": "Ordered list of Circuit Tutor tasks. Schema: {id, type (measure|problem|scenario|exploration), topicId, topicName, difficulty, data}. `data.brief` is a ≤8-word premise that labels the task in the task-picker list. `data.description` is a longer goal-focused paragraph rendered in the picker preview pane and in the active-task widget — it states topology, components and the measurement goal, but never prescribes meter placement, wiring topology, or the formula to apply (those are the student's job to work out).",
   "tasks": [
     {
       "id": "mes-1",
@@ -9,47 +9,21 @@
       "difficulty": "beginner",
       "data": {
         "brief": "Measure current through a resistor.",
+        "description": "Build a circuit with the cell and a resistor (R1), then use the ammeter (A1) to measure the current flowing through R1, and enter the reading in amperes.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 300,
-              "y": 300,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 700,
-              "y": 300,
-              "props": {
-                "resistance": 3
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 700,
-              "y": 500,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",     "x": 300, "y": 300, "props": { "voltage": 6 } },
+            { "id": "R1", "type": "resistor", "x": 700, "y": 300, "props": { "resistance": 3 } },
+            { "id": "A1", "type": "ammeter",  "x": 700, "y": 500, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "R1",
-            "A1"
-          ]
+          "locked": ["C1", "R1", "A1"]
         },
         "targetMeter": "A1",
         "targetUnit": "A",
         "correctAnswer": 2.0,
         "tolerance": 0.05,
-        "hint": "The ammeter must be in series with R1. Form one complete loop.",
-        "explanation": "I = V / R = 6 V / 3 \u03a9 = 2 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.formula.ohms_law"]
       }
     },
     {
@@ -60,47 +34,21 @@
       "difficulty": "beginner",
       "data": {
         "brief": "Measure voltage across a bulb.",
+        "description": "Build a circuit with the cell and the bulb (L1), then use the voltmeter (V1) to measure the potential difference across L1, and enter the reading in volts.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 300,
-              "y": 300,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "L1",
-              "type": "bulb",
-              "x": 700,
-              "y": 300,
-              "props": {
-                "resistance": 6
-              }
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 700,
-              "y": 500,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 300, "y": 300, "props": { "voltage": 6 } },
+            { "id": "L1", "type": "bulb",      "x": 700, "y": 300, "props": { "resistance": 6 } },
+            { "id": "V1", "type": "voltmeter", "x": 700, "y": 500, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "L1",
-            "V1"
-          ]
+          "locked": ["C1", "L1", "V1"]
         },
         "targetMeter": "V1",
         "targetUnit": "V",
         "correctAnswer": 6.0,
         "tolerance": 0.2,
-        "hint": "A voltmeter goes in parallel across the component you want to measure.",
-        "explanation": "With only one bulb in the loop the full supply p.d. sits across it: 6 V."
+        "relatedFacts": ["kb.voltmeter.placement"]
       }
     },
     {
@@ -111,57 +59,22 @@
       "difficulty": "beginner",
       "data": {
         "brief": "Find current in a series loop.",
+        "description": "Build a series circuit with the cell and two resistors, then use the ammeter (A1) to measure the current flowing in the loop, and enter the reading in amperes.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 280,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 560,
-              "y": 280,
-              "props": {
-                "resistance": 2
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 860,
-              "y": 280,
-              "props": {
-                "resistance": 4
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 560,
-              "y": 500,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",     "x": 260, "y": 280, "props": { "voltage": 6 } },
+            { "id": "R1", "type": "resistor", "x": 560, "y": 280, "props": { "resistance": 2 } },
+            { "id": "R2", "type": "resistor", "x": 860, "y": 280, "props": { "resistance": 4 } },
+            { "id": "A1", "type": "ammeter",  "x": 560, "y": 500, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "R1",
-            "R2",
-            "A1"
-          ]
+          "locked": ["C1", "R1", "R2", "A1"]
         },
         "targetMeter": "A1",
         "targetUnit": "A",
         "correctAnswer": 1.0,
         "tolerance": 0.05,
-        "hint": "In series, add the resistances. Then use I = V / R_total.",
-        "explanation": "R_total = 2 + 4 = 6 \u03a9. I = 6 / 6 = 1 A. In series the current is the same everywhere."
+        "relatedFacts": ["kb.ammeter.placement", "kb.series.current", "kb.series.resistance", "kb.formula.ohms_law"]
       }
     },
     {
@@ -171,58 +84,23 @@
       "topicName": "Parallel Circuits",
       "difficulty": "intermediate",
       "data": {
-        "brief": "Measure total current in a parallel circuit.",
+        "brief": "Measure total current in parallel.",
+        "description": "Build a parallel circuit with the cell and two resistors, then use the ammeter (A1) to measure the total current drawn from the cell, and enter the reading in amperes.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 300,
-              "props": {
-                "voltage": 12
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 460,
-              "y": 300,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 720,
-              "y": 200,
-              "props": {
-                "resistance": 4
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 720,
-              "y": 420,
-              "props": {
-                "resistance": 6
-              }
-            }
+            { "id": "C1", "type": "cell",     "x": 260, "y": 300, "props": { "voltage": 12 } },
+            { "id": "A1", "type": "ammeter",  "x": 460, "y": 300, "props": {} },
+            { "id": "R1", "type": "resistor", "x": 720, "y": 200, "props": { "resistance": 4 } },
+            { "id": "R2", "type": "resistor", "x": 720, "y": 420, "props": { "resistance": 6 } }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "R2"
-          ]
+          "locked": ["C1", "A1", "R1", "R2"]
         },
         "targetMeter": "A1",
         "targetUnit": "A",
         "correctAnswer": 5.0,
         "tolerance": 0.1,
-        "hint": "The supply p.d. sits across each branch. Total I = I\u2081 + I\u2082.",
-        "explanation": "I\u2081 = 12 / 4 = 3 A, I\u2082 = 12 / 6 = 2 A, I_total = 5 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.parallel.voltage", "kb.parallel.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -232,43 +110,16 @@
       "topicName": "Ohm's Law",
       "difficulty": "beginner",
       "data": {
-        "brief": "Build the circuit and measure the current.",
-        "narrative": "You have a 6 V supply, a resistor R1 of 2 \u03a9, and an ammeter A1. Build the circuit so A1 measures the current through R1.",
-        "challenge": "Use the ammeter reading to verify the circuit current is 3 A.",
+        "brief": "Verify Ohm's law with one resistor.",
+        "description": "Build a circuit with the cell and a resistor (R1), then use the ammeter (A1) to measure the current through R1 and check that it agrees with what Ohm's law predicts.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 300,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 720,
-              "y": 300,
-              "props": {
-                "resistance": 2
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 500,
-              "y": 300,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",     "x": 260, "y": 300, "props": { "voltage": 6 } },
+            { "id": "R1", "type": "resistor", "x": 720, "y": 300, "props": { "resistance": 2 } },
+            { "id": "A1", "type": "ammeter",  "x": 500, "y": 300, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "R1",
-            "A1"
-          ]
+          "locked": ["C1", "R1", "A1"]
         },
         "successCriteria": {
           "measure_current": true,
@@ -279,16 +130,11 @@
           "ammeter_mode": "series",
           "ammeter_measuring": "R1"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 6,
           "target_resistance": 2
         },
-        "hint": "Place the ammeter in series with the resistor, then use I = V / R to check your reading.",
-        "explanation": "Using Ohm's law, I = V / R = 6 / 2 = 3 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.formula.ohms_law"]
       }
     },
     {
@@ -298,43 +144,16 @@
       "topicName": "Ohm's Law",
       "difficulty": "beginner",
       "data": {
-        "brief": "Build the circuit and measure the current.",
-        "narrative": "You have a 12 V supply, a resistor R1 of 4 \u03a9, and an ammeter A1. Build the circuit so A1 measures the current through R1.",
-        "challenge": "Use the ammeter reading to verify the circuit current is 3 A.",
+        "brief": "Verify Ohm's law with one resistor.",
+        "description": "Build a circuit with the cell and a resistor (R1), then use the ammeter (A1) to measure the current through R1 and check that it agrees with what Ohm's law predicts.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 300,
-              "props": {
-                "voltage": 12
-              }
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 720,
-              "y": 300,
-              "props": {
-                "resistance": 4
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 500,
-              "y": 300,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",     "x": 260, "y": 300, "props": { "voltage": 12 } },
+            { "id": "R1", "type": "resistor", "x": 720, "y": 300, "props": { "resistance": 4 } },
+            { "id": "A1", "type": "ammeter",  "x": 500, "y": 300, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "R1",
-            "A1"
-          ]
+          "locked": ["C1", "R1", "A1"]
         },
         "successCriteria": {
           "measure_current": true,
@@ -345,16 +164,11 @@
           "ammeter_mode": "series",
           "ammeter_measuring": "R1"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 12,
           "target_resistance": 4
         },
-        "hint": "Place the ammeter in series with the resistor, then use I = V / R to check your reading.",
-        "explanation": "Using Ohm's law, I = V / R = 12 / 4 = 3 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.formula.ohms_law"]
       }
     },
     {
@@ -364,43 +178,16 @@
       "topicName": "Ohm's Law",
       "difficulty": "intermediate",
       "data": {
-        "brief": "Build the circuit and measure the current.",
-        "narrative": "You have a 9 V supply, a resistor R1 of 15 \u03a9, and an ammeter A1. Build the circuit so A1 measures the current through R1.",
-        "challenge": "Use the ammeter reading to verify the circuit current is 0.6 A.",
+        "brief": "Verify Ohm's law with one resistor.",
+        "description": "Build a circuit with the cell and a resistor (R1), then use the ammeter (A1) to measure the current through R1 and check that it agrees with what Ohm's law predicts.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 300,
-              "props": {
-                "voltage": 9
-              }
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 720,
-              "y": 300,
-              "props": {
-                "resistance": 15
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 500,
-              "y": 300,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",     "x": 260, "y": 300, "props": { "voltage": 9 } },
+            { "id": "R1", "type": "resistor", "x": 720, "y": 300, "props": { "resistance": 15 } },
+            { "id": "A1", "type": "ammeter",  "x": 500, "y": 300, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "R1",
-            "A1"
-          ]
+          "locked": ["C1", "R1", "A1"]
         },
         "successCriteria": {
           "measure_current": true,
@@ -411,16 +198,11 @@
           "ammeter_mode": "series",
           "ammeter_measuring": "R1"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 9,
           "target_resistance": 15
         },
-        "hint": "Place the ammeter in series with the resistor, then use I = V / R to check your reading.",
-        "explanation": "Using Ohm's law, I = V / R = 9 / 15 = 0.6 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.formula.ohms_law"]
       }
     },
     {
@@ -430,43 +212,16 @@
       "topicName": "Ohm's Law",
       "difficulty": "advanced",
       "data": {
-        "brief": "Build the circuit and measure the current.",
-        "narrative": "You have a 230 V supply, a resistor R1 of 46 \u03a9, and an ammeter A1. Build the circuit so A1 measures the current through R1.",
-        "challenge": "Use the ammeter reading to verify the circuit current is 5 A.",
+        "brief": "Verify Ohm's law with one resistor.",
+        "description": "Build a circuit with the cell and a resistor (R1), then use the ammeter (A1) to measure the current through R1 and check that it agrees with what Ohm's law predicts.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 300,
-              "props": {
-                "voltage": 230
-              }
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 720,
-              "y": 300,
-              "props": {
-                "resistance": 46
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 500,
-              "y": 300,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",     "x": 260, "y": 300, "props": { "voltage": 230 } },
+            { "id": "R1", "type": "resistor", "x": 720, "y": 300, "props": { "resistance": 46 } },
+            { "id": "A1", "type": "ammeter",  "x": 500, "y": 300, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "R1",
-            "A1"
-          ]
+          "locked": ["C1", "R1", "A1"]
         },
         "successCriteria": {
           "measure_current": true,
@@ -477,16 +232,11 @@
           "ammeter_mode": "series",
           "ammeter_measuring": "R1"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 230,
           "target_resistance": 46
         },
-        "hint": "Place the ammeter in series with the resistor, then use I = V / R to check your reading.",
-        "explanation": "Using Ohm's law, I = V / R = 230 / 46 = 5 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.formula.ohms_law"]
       }
     },
     {
@@ -496,61 +246,18 @@
       "topicName": "Series Circuits",
       "difficulty": "beginner",
       "data": {
-        "brief": "Build a series circuit and measure the p.d. across R1.",
-        "narrative": "You have a 6 V supply, resistors R1 = 2 \u03a9 and R2 = 4 \u03a9, an ammeter A1 and a voltmeter V1. Build a series circuit and use the meters correctly.",
-        "challenge": "Measure the current in the loop and the p.d. across R1, then verify that the p.d. across R1 is 2 V.",
+        "brief": "Verify p.d. share in a series circuit.",
+        "description": "Build a series circuit with two resistors (R1 and R2), then use the ammeter (A1) and voltmeter (V1) to find the current through R1 and the p.d. across R1, and verify Ohm's law for R1.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 220,
-              "y": 300,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 420,
-              "y": 300,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 700,
-              "y": 300,
-              "props": {
-                "resistance": 2
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 980,
-              "y": 300,
-              "props": {
-                "resistance": 4
-              }
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 700,
-              "y": 520,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 220, "y": 300, "props": { "voltage": 6 } },
+            { "id": "A1", "type": "ammeter",   "x": 420, "y": 300, "props": {} },
+            { "id": "R1", "type": "resistor",  "x": 700, "y": 300, "props": { "resistance": 2 } },
+            { "id": "R2", "type": "resistor",  "x": 980, "y": 300, "props": { "resistance": 4 } },
+            { "id": "V1", "type": "voltmeter", "x": 700, "y": 520, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "R2",
-            "V1"
-          ]
+          "locked": ["C1", "A1", "R1", "R2", "V1"]
         },
         "successCriteria": {
           "verify_series_voltage": true,
@@ -566,19 +273,12 @@
           "voltmeter_mode": "parallel",
           "voltmeter_across": "R1"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement",
-          "kb.series.current",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 6,
           "r1_resistance": 2,
           "r2_resistance": 4
         },
-        "hint": "In series, the current is the same everywhere. Measure the loop current first, then use V = I \u00d7 R for R1.",
-        "explanation": "R_total = 2 + 4 = 6 \u03a9, so I = 6 / 6 = 1 A. Then V_R1 = I \u00d7 R1 = 1 \u00d7 2 = 2 V."
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.series.current", "kb.series.voltage", "kb.formula.ohms_law"]
       }
     },
     {
@@ -588,61 +288,18 @@
       "topicName": "Series Circuits",
       "difficulty": "intermediate",
       "data": {
-        "brief": "Build a series circuit and measure the p.d. across R1.",
-        "narrative": "You have a 12 V supply, resistors R1 = 3 \u03a9 and R2 = 9 \u03a9, an ammeter A1 and a voltmeter V1. Build a series circuit and use the meters correctly.",
-        "challenge": "Measure the current in the loop and the p.d. across R1, then verify that the p.d. across R1 is 3 V.",
+        "brief": "Verify p.d. share in a series circuit.",
+        "description": "Build a series circuit with two resistors (R1 and R2), then use the ammeter (A1) and voltmeter (V1) to find the current through R1 and the p.d. across R1, and verify Ohm's law for R1.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 220,
-              "y": 300,
-              "props": {
-                "voltage": 12
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 420,
-              "y": 300,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 700,
-              "y": 300,
-              "props": {
-                "resistance": 3
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 980,
-              "y": 300,
-              "props": {
-                "resistance": 9
-              }
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 700,
-              "y": 520,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 220, "y": 300, "props": { "voltage": 12 } },
+            { "id": "A1", "type": "ammeter",   "x": 420, "y": 300, "props": {} },
+            { "id": "R1", "type": "resistor",  "x": 700, "y": 300, "props": { "resistance": 3 } },
+            { "id": "R2", "type": "resistor",  "x": 980, "y": 300, "props": { "resistance": 9 } },
+            { "id": "V1", "type": "voltmeter", "x": 700, "y": 520, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "R2",
-            "V1"
-          ]
+          "locked": ["C1", "A1", "R1", "R2", "V1"]
         },
         "successCriteria": {
           "verify_series_voltage": true,
@@ -658,19 +315,12 @@
           "voltmeter_mode": "parallel",
           "voltmeter_across": "R1"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement",
-          "kb.series.current",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 12,
           "r1_resistance": 3,
           "r2_resistance": 9
         },
-        "hint": "In series, the current is the same everywhere. Measure the loop current first, then use V = I \u00d7 R for R1.",
-        "explanation": "R_total = 3 + 9 = 12 \u03a9, so I = 12 / 12 = 1 A. Then V_R1 = I \u00d7 R1 = 1 \u00d7 3 = 3 V."
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.series.current", "kb.series.voltage", "kb.formula.ohms_law"]
       }
     },
     {
@@ -680,61 +330,18 @@
       "topicName": "Series Circuits",
       "difficulty": "intermediate",
       "data": {
-        "brief": "Build a series circuit and measure the p.d. across R1.",
-        "narrative": "You have a 9 V supply, resistors R1 = 5 \u03a9 and R2 = 10 \u03a9, an ammeter A1 and a voltmeter V1. Build a series circuit and use the meters correctly.",
-        "challenge": "Measure the current in the loop and the p.d. across R1, then verify that the p.d. across R1 is 3 V.",
+        "brief": "Verify p.d. share in a series circuit.",
+        "description": "Build a series circuit with two resistors (R1 and R2), then use the ammeter (A1) and voltmeter (V1) to find the current through R1 and the p.d. across R1, and verify Ohm's law for R1.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 220,
-              "y": 300,
-              "props": {
-                "voltage": 9
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 420,
-              "y": 300,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 700,
-              "y": 300,
-              "props": {
-                "resistance": 5
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 980,
-              "y": 300,
-              "props": {
-                "resistance": 10
-              }
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 700,
-              "y": 520,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 220, "y": 300, "props": { "voltage": 9 } },
+            { "id": "A1", "type": "ammeter",   "x": 420, "y": 300, "props": {} },
+            { "id": "R1", "type": "resistor",  "x": 700, "y": 300, "props": { "resistance": 5 } },
+            { "id": "R2", "type": "resistor",  "x": 980, "y": 300, "props": { "resistance": 10 } },
+            { "id": "V1", "type": "voltmeter", "x": 700, "y": 520, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "R2",
-            "V1"
-          ]
+          "locked": ["C1", "A1", "R1", "R2", "V1"]
         },
         "successCriteria": {
           "verify_series_voltage": true,
@@ -750,19 +357,12 @@
           "voltmeter_mode": "parallel",
           "voltmeter_across": "R1"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement",
-          "kb.series.current",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 9,
           "r1_resistance": 5,
           "r2_resistance": 10
         },
-        "hint": "In series, the current is the same everywhere. Measure the loop current first, then use V = I \u00d7 R for R1.",
-        "explanation": "R_total = 5 + 10 = 15 \u03a9, so I = 9 / 15 = 0.6 A. Then V_R1 = I \u00d7 R1 = 0.6 \u00d7 5 = 3 V."
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.series.current", "kb.series.voltage", "kb.formula.ohms_law"]
       }
     },
     {
@@ -772,79 +372,33 @@
       "topicName": "Parallel Circuits",
       "difficulty": "beginner",
       "data": {
-        "brief": "Build the parallel circuit and measure total current.",
-        "narrative": "You have a 6 V supply, two branches with R1 = 2 \u03a9 and R2 = 3 \u03a9, and an ammeter A1 for the main loop.",
-        "challenge": "Build the parallel circuit so A1 measures the total current from the supply, then verify the total current is 5 A.",
+        "brief": "Verify branch currents add to total.",
+        "description": "Build a parallel circuit with two resistors (R1 and R2), then use the ammeter (A1) to measure the total current and verify it equals the sum of the branch currents.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 240,
-              "y": 360,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 440,
-              "y": 360,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 820,
-              "y": 220,
-              "props": {
-                "resistance": 2
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 820,
-              "y": 500,
-              "props": {
-                "resistance": 3
-              }
-            }
+            { "id": "C1", "type": "cell",     "x": 240, "y": 360, "props": { "voltage": 6 } },
+            { "id": "A1", "type": "ammeter",  "x": 440, "y": 360, "props": {} },
+            { "id": "R1", "type": "resistor", "x": 820, "y": 220, "props": { "resistance": 2 } },
+            { "id": "R2", "type": "resistor", "x": 820, "y": 500, "props": { "resistance": 3 } }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "R2"
-          ]
+          "locked": ["C1", "A1", "R1", "R2"]
         },
         "successCriteria": {
           "measure_total_current": true,
           "ammeter": "A1",
-          "expected_branch_currents": {
-            "R1": 3.0,
-            "R2": 2.0
-          },
+          "expected_branch_currents": { "R1": 3.0, "R2": 2.0 },
           "expected_total_current": 5.0,
           "current_tol": 0.15,
           "ammeter_mode": "series",
           "ammeter_position": "main_loop"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.parallel.voltage",
-          "kb.parallel.current",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 6,
           "r1_resistance": 2,
           "r2_resistance": 3
         },
-        "hint": "Put the ammeter in series before the branches split so it reads the total supply current.",
-        "explanation": "Each branch gets 6 V, so I1 = 6/2 = 3 A and I2 = 6/3 = 2 A. Total current = 3 + 2 = 5 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.parallel.voltage", "kb.parallel.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -854,79 +408,33 @@
       "topicName": "Parallel Circuits",
       "difficulty": "intermediate",
       "data": {
-        "brief": "Build the parallel circuit and measure total current.",
-        "narrative": "You have a 12 V supply, two branches with R1 = 4 \u03a9 and R2 = 6 \u03a9, and an ammeter A1 for the main loop.",
-        "challenge": "Build the parallel circuit so A1 measures the total current from the supply, then verify the total current is 5 A.",
+        "brief": "Verify branch currents add to total.",
+        "description": "Build a parallel circuit with two resistors (R1 and R2), then use the ammeter (A1) to measure the total current and verify it equals the sum of the branch currents.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 240,
-              "y": 360,
-              "props": {
-                "voltage": 12
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 440,
-              "y": 360,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 820,
-              "y": 220,
-              "props": {
-                "resistance": 4
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 820,
-              "y": 500,
-              "props": {
-                "resistance": 6
-              }
-            }
+            { "id": "C1", "type": "cell",     "x": 240, "y": 360, "props": { "voltage": 12 } },
+            { "id": "A1", "type": "ammeter",  "x": 440, "y": 360, "props": {} },
+            { "id": "R1", "type": "resistor", "x": 820, "y": 220, "props": { "resistance": 4 } },
+            { "id": "R2", "type": "resistor", "x": 820, "y": 500, "props": { "resistance": 6 } }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "R2"
-          ]
+          "locked": ["C1", "A1", "R1", "R2"]
         },
         "successCriteria": {
           "measure_total_current": true,
           "ammeter": "A1",
-          "expected_branch_currents": {
-            "R1": 3.0,
-            "R2": 2.0
-          },
+          "expected_branch_currents": { "R1": 3.0, "R2": 2.0 },
           "expected_total_current": 5.0,
           "current_tol": 0.15,
           "ammeter_mode": "series",
           "ammeter_position": "main_loop"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.parallel.voltage",
-          "kb.parallel.current",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 12,
           "r1_resistance": 4,
           "r2_resistance": 6
         },
-        "hint": "Put the ammeter in series before the branches split so it reads the total supply current.",
-        "explanation": "Each branch gets 12 V, so I1 = 12/4 = 3 A and I2 = 12/6 = 2 A. Total current = 3 + 2 = 5 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.parallel.voltage", "kb.parallel.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -936,79 +444,33 @@
       "topicName": "Parallel Circuits",
       "difficulty": "advanced",
       "data": {
-        "brief": "Build the parallel circuit and measure total current.",
-        "narrative": "You have a 9 V supply, two branches with R1 = 10 \u03a9 and R2 = 15 \u03a9, and an ammeter A1 for the main loop.",
-        "challenge": "Build the parallel circuit so A1 measures the total current from the supply, then verify the total current is 1.5 A.",
+        "brief": "Verify branch currents add to total.",
+        "description": "Build a parallel circuit with two resistors (R1 and R2), then use the ammeter (A1) to measure the total current and verify it equals the sum of the branch currents.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 240,
-              "y": 360,
-              "props": {
-                "voltage": 9
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 440,
-              "y": 360,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 820,
-              "y": 220,
-              "props": {
-                "resistance": 10
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 820,
-              "y": 500,
-              "props": {
-                "resistance": 15
-              }
-            }
+            { "id": "C1", "type": "cell",     "x": 240, "y": 360, "props": { "voltage": 9 } },
+            { "id": "A1", "type": "ammeter",  "x": 440, "y": 360, "props": {} },
+            { "id": "R1", "type": "resistor", "x": 820, "y": 220, "props": { "resistance": 10 } },
+            { "id": "R2", "type": "resistor", "x": 820, "y": 500, "props": { "resistance": 15 } }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "R2"
-          ]
+          "locked": ["C1", "A1", "R1", "R2"]
         },
         "successCriteria": {
           "measure_total_current": true,
           "ammeter": "A1",
-          "expected_branch_currents": {
-            "R1": 0.9,
-            "R2": 0.6
-          },
+          "expected_branch_currents": { "R1": 0.9, "R2": 0.6 },
           "expected_total_current": 1.5,
           "current_tol": 0.15,
           "ammeter_mode": "series",
           "ammeter_position": "main_loop"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.parallel.voltage",
-          "kb.parallel.current",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 9,
           "r1_resistance": 10,
           "r2_resistance": 15
         },
-        "hint": "Put the ammeter in series before the branches split so it reads the total supply current.",
-        "explanation": "Each branch gets 9 V, so I1 = 9/10 = 0.9 A and I2 = 9/15 = 0.6 A. Total current = 0.9 + 0.6 = 1.5 A."
+        "relatedFacts": ["kb.ammeter.placement", "kb.parallel.voltage", "kb.parallel.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -1018,67 +480,29 @@
       "topicName": "Measurement",
       "difficulty": "beginner",
       "data": {
-        "brief": "Place ammeter and voltmeter correctly.",
-        "narrative": "You want to measure the current through the bulb AND the potential difference across it at the same time.",
-        "parameters": {
-          "supply_voltage": 6,
-          "bulb_resistance": 4
+        "brief": "Place an ammeter and voltmeter correctly.",
+        "description": "Build a circuit with the cell and the bulb (B1), then use the ammeter (A1) and voltmeter (V1) to measure both the current through B1 and the potential difference across B1 at the same time.",
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell",      "x": 260, "y": 300, "props": { "voltage": 6 } },
+            { "id": "B1", "type": "bulb",      "x": 720, "y": 300, "props": { "resistance": 4 } },
+            { "id": "A1", "type": "ammeter",   "x": 500, "y": 300, "props": {} },
+            { "id": "V1", "type": "voltmeter", "x": 720, "y": 520, "props": {} }
+          ],
+          "wires": [],
+          "locked": ["C1", "B1", "A1", "V1"]
         },
-        "challenge": "Place the ammeter and the voltmeter correctly on the circuit.",
         "successCriteria": {
           "ammeter_mode": "series",
           "voltmeter_mode": "parallel",
           "voltmeter_across": "B1",
           "ammeter_measuring": "B1"
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement"
-        ],
-        "initial": {
-          "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 300,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "B1",
-              "type": "bulb",
-              "x": 720,
-              "y": 300,
-              "props": {
-                "resistance": 4
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 500,
-              "y": 300,
-              "props": {}
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 720,
-              "y": 520,
-              "props": {}
-            }
-          ],
-          "wires": [],
-          "locked": [
-            "C1",
-            "B1",
-            "A1",
-            "V1"
-          ]
+        "parameters": {
+          "supply_voltage": 6,
+          "bulb_resistance": 4
         },
-        "hint": "Place the ammeter in series with the bulb and the voltmeter in parallel across the bulb."
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement"]
       }
     },
     {
@@ -1088,58 +512,25 @@
       "topicName": "Fault Finding",
       "difficulty": "intermediate",
       "data": {
-        "brief": "Diagnose why the circuit fails.",
-        "narrative": "Two bulbs in series with a cell. When you close the switch neither bulb lights up.",
+        "brief": "Diagnose why a circuit fails.",
+        "description": "Two bulbs (B1 and B2) are arranged in series with the cell, but neither bulb lights up. Investigate the circuit to identify the fault that is preventing current from flowing in the loop.",
+        "initial": {
+          "components": [
+            { "id": "C1", "type": "cell", "x": 240, "y": 320, "props": { "voltage": 3 } },
+            { "id": "B1", "type": "bulb", "x": 600, "y": 220, "props": { "resistance": 3 } },
+            { "id": "B2", "type": "bulb", "x": 900, "y": 220, "props": { "resistance": 3 } }
+          ],
+          "wires": [],
+          "locked": ["C1", "B1", "B2"]
+        },
+        "successCriteria": {
+          "fault": "break_in_loop"
+        },
         "parameters": {
           "supply_voltage": 3,
           "bulbs": 2
         },
-        "challenge": "Identify the most likely fault and test it in the simulator.",
-        "successCriteria": {
-          "fault": "break_in_loop"
-        },
-        "relatedFacts": [
-          "kb.fault.open_circuit",
-          "kb.series.current"
-        ],
-        "initial": {
-          "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 240,
-              "y": 320,
-              "props": {
-                "voltage": 3
-              }
-            },
-            {
-              "id": "B1",
-              "type": "bulb",
-              "x": 600,
-              "y": 220,
-              "props": {
-                "resistance": 3
-              }
-            },
-            {
-              "id": "B2",
-              "type": "bulb",
-              "x": 900,
-              "y": 220,
-              "props": {
-                "resistance": 3
-              }
-            }
-          ],
-          "wires": [],
-          "locked": [
-            "C1",
-            "B1",
-            "B2"
-          ]
-        },
-        "hint": "Start by checking whether there is one complete loop from the cell, through both bulbs, and back again."
+        "relatedFacts": ["kb.fault.open_circuit", "kb.series.current"]
       }
     },
     {
@@ -1149,25 +540,13 @@
       "topicName": "Circuit Exploration",
       "difficulty": "beginner",
       "data": {
-        "brief": "Compare series and parallel brightness.",
-        "concept": "Series vs parallel brightness",
-        "interactiveElements": [
-          "circuit-canvas",
-          "brightness-meter"
-        ],
+        "brief": "Compare brightness in series and parallel.",
+        "description": "Build two identical bulbs in series, then rebuild them as parallel branches across the cell, and compare the brightness in each layout — and what happens to each bulb when one is removed.",
         "guidedQuestions": [
           "Build two identical bulbs in series. Then rebuild them in parallel. Which is brighter, and why?",
-          "What happens to the brightness of bulb A when you unscrew bulb B \u2014 in series, and in parallel?"
+          "What happens to the brightness of bulb A when you unscrew bulb B — in series, and in parallel?"
         ],
-        "discoveryGoals": [
-          "Parallel branches share the supply p.d.; series branches share it.",
-          "Removing a bulb in series breaks the whole loop; in parallel, only that branch is affected."
-        ],
-        "relatedFacts": [
-          "kb.series.voltage",
-          "kb.parallel.voltage",
-          "kb.fault.open_circuit"
-        ]
+        "relatedFacts": ["kb.series.voltage", "kb.parallel.voltage", "kb.fault.open_circuit"]
       }
     },
     {
@@ -1177,48 +556,22 @@
       "topicName": "Series Circuits",
       "difficulty": "Beginner",
       "data": {
-        "brief": "Build a series circuit and read the current.",
+        "brief": "Read current in a series loop.",
+        "description": "Build a series circuit with the cell and the bulb (L1), then use the ammeter (A1) to measure the current through L1, and enter the reading in amperes.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 300,
-              "y": 300,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "L1",
-              "type": "bulb",
-              "x": 700,
-              "y": 300,
-              "props": {
-                "resistance": 6
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 700,
-              "y": 500,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",     "x": 300, "y": 300, "props": { "voltage": 6 } },
+            { "id": "L1", "type": "bulb",     "x": 700, "y": 300, "props": { "resistance": 6 } },
+            { "id": "A1", "type": "ammeter",  "x": 700, "y": 500, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "L1",
-            "A1"
-          ]
+          "locked": ["C1", "L1", "A1"]
         },
         "targetMeter": "A1",
         "targetUnit": "A",
         "correctAnswer": 1.0,
         "tolerance": 0.05,
-        "hint": "In a series circuit the ammeter sits in the single loop. Use I = V / R.",
-        "explanation": "One loop: I = V / R = 6 V / 6 \u03a9 = 1 A. In series the current is the same everywhere."
+        "relatedFacts": ["kb.ammeter.placement", "kb.series.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -1228,58 +581,23 @@
       "topicName": "Parallel Circuits",
       "difficulty": "Beginner",
       "data": {
-        "brief": "Measure voltage across a parallel branch.",
+        "brief": "Read voltage across a parallel branch.",
+        "description": "Build a parallel circuit with the cell and two bulbs, then use the voltmeter (V1) to measure the potential difference across L1, and enter the reading in volts.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 300,
-              "props": {
-                "voltage": 9
-              }
-            },
-            {
-              "id": "L1",
-              "type": "bulb",
-              "x": 720,
-              "y": 200,
-              "props": {
-                "resistance": 6
-              }
-            },
-            {
-              "id": "L2",
-              "type": "bulb",
-              "x": 720,
-              "y": 420,
-              "props": {
-                "resistance": 9
-              }
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 980,
-              "y": 200,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 260, "y": 300, "props": { "voltage": 9 } },
+            { "id": "L1", "type": "bulb",      "x": 720, "y": 200, "props": { "resistance": 6 } },
+            { "id": "L2", "type": "bulb",      "x": 720, "y": 420, "props": { "resistance": 9 } },
+            { "id": "V1", "type": "voltmeter", "x": 980, "y": 200, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "L1",
-            "L2",
-            "V1"
-          ]
+          "locked": ["C1", "L1", "L2", "V1"]
         },
         "targetMeter": "V1",
         "targetUnit": "V",
         "correctAnswer": 9.0,
         "tolerance": 0.2,
-        "hint": "The voltmeter goes in parallel across L1. Each parallel branch gets the full supply p.d.",
-        "explanation": "Each branch sits directly across the cell, so V across L1 = supply = 9 V."
+        "relatedFacts": ["kb.voltmeter.placement", "kb.parallel.voltage"]
       }
     },
     {
@@ -1289,51 +607,17 @@
       "topicName": "Series Circuits",
       "difficulty": "Intermediate",
       "data": {
-        "brief": "Measure voltage and current, then work out resistance.",
-        "narrative": "R1 is in a series circuit. Use the meters to find the p.d. across R1 and the current through it.",
-        "challenge": "Build the circuit, take the readings, and verify that R1 has a resistance of 3 \u03a9.",
+        "brief": "Find a resistor's value with two meters.",
+        "description": "Build a series circuit with the cell and a resistor (R1), then use the ammeter (A1) and voltmeter (V1) to measure R1's current and p.d., and work out its resistance.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 240,
-              "y": 300,
-              "props": {
-                "voltage": 6
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 460,
-              "y": 300,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 760,
-              "y": 300,
-              "props": {
-                "resistance": 3
-              }
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 760,
-              "y": 520,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 240, "y": 300, "props": { "voltage": 6 } },
+            { "id": "A1", "type": "ammeter",   "x": 460, "y": 300, "props": {} },
+            { "id": "R1", "type": "resistor",  "x": 760, "y": 300, "props": { "resistance": 3 } },
+            { "id": "V1", "type": "voltmeter", "x": 760, "y": 520, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "V1"
-          ]
+          "locked": ["C1", "A1", "R1", "V1"]
         },
         "successCriteria": {
           "verify_ohms_law": true,
@@ -1347,18 +631,11 @@
           "voltage_tol": 0.2,
           "resistance_tol": 0.2
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement",
-          "kb.series.current",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 6,
           "target_resistance": 3
         },
-        "hint": "Measure V across R1 and I through R1, then use R = V / I.",
-        "explanation": "R = V / I = 6 / 2 = 3 \u03a9."
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.series.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -1368,61 +645,18 @@
       "topicName": "Parallel Circuits",
       "difficulty": "Intermediate",
       "data": {
-        "brief": "Measure a branch voltage and current, then work out the branch resistance.",
-        "narrative": "R1 is one branch of a parallel circuit. Use the meters to read the p.d. across R1 and the current through R1 only.",
-        "challenge": "Build the circuit so the meters read R1's branch values, then verify that R1 has a resistance of 4 \u03a9.",
+        "brief": "Find a parallel branch resistor's value.",
+        "description": "Build a parallel circuit with the cell and two resistors, then use the ammeter (A1) and voltmeter (V1) to measure R1's branch current and p.d., and work out R1's resistance.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 240,
-              "y": 360,
-              "props": {
-                "voltage": 12
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 520,
-              "y": 220,
-              "props": {}
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 820,
-              "y": 220,
-              "props": {
-                "resistance": 4
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 820,
-              "y": 500,
-              "props": {
-                "resistance": 8
-              }
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 1060,
-              "y": 220,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 240, "y": 360, "props": { "voltage": 12 } },
+            { "id": "A1", "type": "ammeter",   "x": 520, "y": 220, "props": {} },
+            { "id": "R1", "type": "resistor",  "x": 820, "y": 220, "props": { "resistance": 4 } },
+            { "id": "R2", "type": "resistor",  "x": 820, "y": 500, "props": { "resistance": 8 } },
+            { "id": "V1", "type": "voltmeter", "x": 1060, "y": 220, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "A1",
-            "R1",
-            "R2",
-            "V1"
-          ]
+          "locked": ["C1", "A1", "R1", "R2", "V1"]
         },
         "successCriteria": {
           "verify_ohms_law": true,
@@ -1436,19 +670,12 @@
           "voltage_tol": 0.3,
           "resistance_tol": 0.25
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement",
-          "kb.parallel.voltage",
-          "kb.formula.ohms_law"
-        ],
         "parameters": {
           "supply_voltage": 12,
           "target_resistance": 4,
           "other_branch_resistance": 8
         },
-        "hint": "In parallel, each branch gets the full supply p.d. Place the ammeter in series with R1 only.",
-        "explanation": "The branch has 12 V across it and 3 A through it, so R = 12 / 3 = 4 \u03a9."
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.parallel.voltage", "kb.parallel.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -1458,55 +685,17 @@
       "topicName": "Series Circuits",
       "difficulty": "Expert",
       "data": {
-        "brief": "Verify Ohm's law in a series circuit.",
-        "narrative": "You have a 12 V cell, a resistor R1, an ammeter A1 and a voltmeter V1. Build a series circuit that lets you measure both the current through R1 and the p.d. across R1.",
-        "challenge": "Verify that R1 is 4 \u03a9 using A1 and V1 with R = V / I.",
-        "parameters": {
-          "supply_voltage": 12,
-          "target_resistance": 4
-        },
+        "brief": "Verify Ohm's law in series.",
+        "description": "Build a series circuit with the cell and a resistor (R1), then use the ammeter (A1) and voltmeter (V1) to verify R1's resistance from its current and p.d.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 300,
-              "props": {
-                "voltage": 12
-              }
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 720,
-              "y": 300,
-              "props": {
-                "resistance": 4
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 480,
-              "y": 300,
-              "props": {}
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 720,
-              "y": 520,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 260, "y": 300, "props": { "voltage": 12 } },
+            { "id": "R1", "type": "resistor",  "x": 720, "y": 300, "props": { "resistance": 4 } },
+            { "id": "A1", "type": "ammeter",   "x": 480, "y": 300, "props": {} },
+            { "id": "V1", "type": "voltmeter", "x": 720, "y": 520, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "R1",
-            "A1",
-            "V1"
-          ]
+          "locked": ["C1", "R1", "A1", "V1"]
         },
         "successCriteria": {
           "verify_ohms_law": true,
@@ -1520,11 +709,11 @@
           "voltage_tol": 0.3,
           "resistance_tol": 0.25
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement",
-          "kb.formula.ohms_law"
-        ]
+        "parameters": {
+          "supply_voltage": 12,
+          "target_resistance": 4
+        },
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.series.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -1534,66 +723,18 @@
       "topicName": "Parallel Circuits",
       "difficulty": "Expert",
       "data": {
-        "brief": "Verify Ohm's law on a parallel branch.",
-        "narrative": "Two resistors are connected in parallel across a 12 V cell: R1 (the branch you care about) and R2 (a second branch). A1 should read the current through R1 only, and V1 should read the p.d. across R1.",
-        "challenge": "Verify that R1 is 6 \u03a9 using the branch readings on A1 and V1 with R = V / I.",
-        "parameters": {
-          "supply_voltage": 12,
-          "target_resistance": 6,
-          "other_branch": 12
-        },
+        "brief": "Verify Ohm's law in a parallel branch.",
+        "description": "Build a parallel circuit with the cell and two resistors (R1 and R2), then use the ammeter (A1) and voltmeter (V1) to verify R1's resistance from its branch current and p.d.",
         "initial": {
           "components": [
-            {
-              "id": "C1",
-              "type": "cell",
-              "x": 260,
-              "y": 360,
-              "props": {
-                "voltage": 12
-              }
-            },
-            {
-              "id": "R1",
-              "type": "resistor",
-              "x": 820,
-              "y": 240,
-              "props": {
-                "resistance": 6
-              }
-            },
-            {
-              "id": "R2",
-              "type": "resistor",
-              "x": 820,
-              "y": 480,
-              "props": {
-                "resistance": 12
-              }
-            },
-            {
-              "id": "A1",
-              "type": "ammeter",
-              "x": 600,
-              "y": 240,
-              "props": {}
-            },
-            {
-              "id": "V1",
-              "type": "voltmeter",
-              "x": 1060,
-              "y": 240,
-              "props": {}
-            }
+            { "id": "C1", "type": "cell",      "x": 260, "y": 360, "props": { "voltage": 12 } },
+            { "id": "R1", "type": "resistor",  "x": 820, "y": 240, "props": { "resistance": 6 } },
+            { "id": "R2", "type": "resistor",  "x": 820, "y": 480, "props": { "resistance": 12 } },
+            { "id": "A1", "type": "ammeter",   "x": 600, "y": 240, "props": {} },
+            { "id": "V1", "type": "voltmeter", "x": 1060, "y": 240, "props": {} }
           ],
           "wires": [],
-          "locked": [
-            "C1",
-            "R1",
-            "R2",
-            "A1",
-            "V1"
-          ]
+          "locked": ["C1", "R1", "R2", "A1", "V1"]
         },
         "successCriteria": {
           "verify_ohms_law": true,
@@ -1607,11 +748,12 @@
           "voltage_tol": 0.3,
           "resistance_tol": 0.3
         },
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement",
-          "kb.formula.ohms_law"
-        ]
+        "parameters": {
+          "supply_voltage": 12,
+          "target_resistance": 6,
+          "other_branch_resistance": 12
+        },
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement", "kb.parallel.voltage", "kb.parallel.current", "kb.formula.ohms_law"]
       }
     },
     {
@@ -1621,26 +763,15 @@
       "topicName": "Circuit Exploration",
       "difficulty": "Beginner",
       "data": {
-        "brief": "Explore bulb brightness in series.",
-        "concept": "Bulb brightness in a series circuit",
-        "interactiveElements": [
-          "circuit-canvas"
-        ],
+        "brief": "Explore brightness in series circuits.",
+        "description": "Investigate how bulb brightness changes when bulbs are added in series. Compare a single-bulb loop to a multi-bulb loop, and notice how brightness and current change.",
         "guidedQuestions": [
           "Build a single bulb in a loop with a cell. Now add a second identical bulb in series. Does each bulb look brighter or dimmer than before?",
           "What happens to the ammeter reading when you add the second bulb in series?",
           "If adding a bulb adds resistance, what does Ohm's law predict about the current?",
-          "The current is the same through every component in a series loop \u2014 why does that make the bulbs equally dim?"
+          "The current is the same through every component in a series loop — why does that make the bulbs equally dim?"
         ],
-        "discoveryGoals": [
-          "Current is the same everywhere in a series circuit.",
-          "Adding series components increases total resistance, so current drops.",
-          "Lower current means bulbs in series are dimmer than a single bulb alone."
-        ],
-        "relatedFacts": [
-          "kb.series.current",
-          "kb.formula.ohms_law"
-        ]
+        "relatedFacts": ["kb.series.current", "kb.series.resistance", "kb.formula.ohms_law"]
       }
     },
     {
@@ -1650,26 +781,15 @@
       "topicName": "Circuit Exploration",
       "difficulty": "Intermediate",
       "data": {
-        "brief": "Explore bulb brightness in parallel.",
-        "concept": "Bulb brightness in a parallel circuit",
-        "interactiveElements": [
-          "circuit-canvas"
-        ],
+        "brief": "Explore brightness in parallel circuits.",
+        "description": "Investigate how bulb brightness changes when bulbs are added in parallel. Compare a single-bulb circuit to one with extra parallel branches, and notice how brightness and currents change.",
         "guidedQuestions": [
           "Build one bulb across a cell. Now add a second identical bulb in parallel with the first. Does the first bulb change brightness?",
           "What does a voltmeter across each branch read, compared to the supply?",
-          "Use an ammeter in each branch and an ammeter in the main loop \u2014 how do the branch currents relate to the total current?",
+          "Use an ammeter in each branch and an ammeter in the main loop — how do the branch currents relate to the total current?",
           "Why can bulbs in parallel stay just as bright, even when you add more of them?"
         ],
-        "discoveryGoals": [
-          "Each parallel branch gets the full supply p.d.",
-          "Branch currents add together to make the total current.",
-          "Because p.d. across each branch is unchanged, bulbs in parallel stay bright."
-        ],
-        "relatedFacts": [
-          "kb.parallel.voltage",
-          "kb.parallel.current"
-        ]
+        "relatedFacts": ["kb.parallel.voltage", "kb.parallel.current"]
       }
     },
     {
@@ -1680,25 +800,14 @@
       "difficulty": "Expert",
       "data": {
         "brief": "Explore the limits of real meters.",
-        "concept": "Real ammeters and voltmeters are not perfect",
-        "interactiveElements": [
-          "circuit-canvas"
-        ],
+        "description": "Investigate how real ammeters and voltmeters can disturb the very quantity they are trying to measure, and compare their behaviour to ideal meters.",
         "guidedQuestions": [
-          "An ideal ammeter has zero resistance. What would happen to the current in a simple loop if the ammeter actually had a small resistance of, say, 1 \u03a9?",
+          "An ideal ammeter has zero resistance. What would happen to the current in a simple loop if the ammeter actually had a small resistance of, say, 1 Ω?",
           "An ideal voltmeter has infinite resistance. If a real voltmeter had a finite resistance, how could it draw a small current through itself when connected across a component?",
           "Place a voltmeter across a component in your circuit. Could its presence slightly change the p.d. it is trying to measure? Why or why not?",
           "Overall: in what way might using a real meter perturb the very quantity you are trying to measure?"
         ],
-        "discoveryGoals": [
-          "A real ammeter's non-zero resistance slightly reduces the current it is measuring.",
-          "A real voltmeter's non-infinite resistance draws a small current, which can slightly lower the p.d. across the component.",
-          "Measuring instruments can disturb the circuit \u2014 good measurements rely on meters being close to ideal."
-        ],
-        "relatedFacts": [
-          "kb.ammeter.placement",
-          "kb.voltmeter.placement"
-        ]
+        "relatedFacts": ["kb.ammeter.placement", "kb.voltmeter.placement"]
       }
     }
   ]

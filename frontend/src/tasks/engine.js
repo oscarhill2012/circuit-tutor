@@ -57,7 +57,7 @@ let selectedPreviewId = null;
 let pickerWired = false;
 
 function taskTitle(t) {
-  return t.data.brief || t.data.question || t.data.challenge || t.data.concept || t.id;
+  return t.data.brief || t.data.question || t.id;
 }
 
 function normDifficulty(d) {
@@ -168,25 +168,15 @@ function renderPreview() {
   const done = state.tasksCompleted.has(t.id);
   const title = taskTitle(t);
 
-  let detailsHtml = '';
-  if (t.type === 'measure') {
-    const pinned = (t.data.initial?.components || []).map(c => c.id).join(', ');
-    detailsHtml = `
-      <p>${escapeHtml(title)}</p>
-      <dl class="tp-kv">
-        ${pinned ? `<dt>Pinned</dt><dd>${escapeHtml(pinned)}</dd>` : ''}
-        <dt>Target meter</dt><dd>${escapeHtml(t.data.targetMeter || '—')} (${escapeHtml(t.data.targetUnit || '')})</dd>
-      </dl>`;
-  } else if (t.type === 'problem') {
-    detailsHtml = `<p>${escapeHtml(t.data.question || title)}</p>`;
-  } else if (t.type === 'scenario') {
-    detailsHtml = `<p>${escapeHtml(t.data.challenge || title)}</p>
-      ${t.data.narrative ? `<p class="tp-muted">${escapeHtml(t.data.narrative)}</p>` : ''}`;
-  } else if (t.type === 'exploration') {
-    detailsHtml = `<p>${escapeHtml(t.data.concept || title)}</p>
-      ${t.data.guidedQuestions?.length
-        ? `<ul class="tp-guide">${t.data.guidedQuestions.slice(0, 3).map(q => `<li>${escapeHtml(q)}</li>`).join('')}</ul>`
-        : ''}`;
+  // Preview body: `description` is the goal-focused paragraph (what the
+  // student is trying to do, without prescribing wiring or formulas).
+  // `brief` is the short premise that already labels the button on the left,
+  // so we don't repeat it here. Exploration tasks additionally tease the
+  // first three guided questions so the student knows what they'll investigate.
+  const desc = t.data.description || t.data.brief || title;
+  let detailsHtml = `<p>${escapeHtml(desc)}</p>`;
+  if (t.type === 'exploration' && t.data.guidedQuestions?.length) {
+    detailsHtml += `<ul class="tp-guide">${t.data.guidedQuestions.slice(0, 3).map(q => `<li>${escapeHtml(q)}</li>`).join('')}</ul>`;
   }
 
   el.innerHTML = `
@@ -306,15 +296,17 @@ export function startTask(taskId) {
 // Further replies from the tutor remain Socratic.
 function introduceTask(t) {
   let text = '';
+  const header = `New task — **${t.topicName}** (${t.difficulty}).`;
+  const aim = t.data.description || t.data.brief || '';
   if (t.type === 'measure') {
-    text = `New task — **${t.topicName}** (${t.difficulty}).\n\nAim: ${t.data.brief}\n\nBuild the circuit, then tell me the reading or ask for a hint if you get stuck.`;
+    text = `${header}\n\nAim: ${aim}\n\nBuild the circuit, then tell me the reading or ask for a hint if you get stuck.`;
   } else if (t.type === 'problem') {
-    text = `New task — **${t.topicName}** (${t.difficulty}).\n\nAim: work out the answer to this question — ${t.data.question}\n\nPick an option in the task panel when you're ready, or ask me for a hint.`;
+    text = `${header}\n\nAim: work out the answer to this question — ${t.data.question}\n\nPick an option in the task panel when you're ready, or ask me for a hint.`;
   } else if (t.type === 'scenario') {
-    text = `New task — **${t.topicName}** (${t.difficulty}).\n\nAim: ${t.data.challenge} ${t.data.narrative ? '\n\n' + t.data.narrative : ''}\n\nBuild it and hit "Check my circuit" when you think it's right.`;
+    text = `${header}\n\nAim: ${aim}\n\nBuild it and hit "Check my circuit" when you think it's right.`;
   } else if (t.type === 'exploration') {
     const first = (t.data.guidedQuestions && t.data.guidedQuestions[0]) || '';
-    text = `New exploration — **${t.topicName}**.\n\nAim: investigate "${t.data.concept}". ${first ? 'Start with this: ' + first : ''}\n\nThere's no single right answer — tell me what you notice.`;
+    text = `New exploration — **${t.topicName}**.\n\n${aim}${first ? '\n\nStart with this: ' + first : ''}\n\nThere's no single right answer — tell me what you notice.`;
   }
   appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: text });
 }
@@ -330,8 +322,7 @@ export function renderTask() {
   if (t.type === 'measure') {
     card.innerHTML = `
       <div class="pill">Build &amp; measure</div>
-      <h4>${escapeHtml(t.data.brief)}</h4>
-      <div class="criteria"><b>Pinned:</b> ${t.data.initial.components.map(c => c.id).join(', ')} \u00b7 <b>Read:</b> ${t.data.targetMeter}</div>
+      <p class="task-desc">${escapeHtml(t.data.description || t.data.brief || '')}</p>
       <div class="row" style="align-items:center; gap:8px;">
         <label style="font-size:13px; color:var(--muted);">Your ${t.data.targetMeter} reading:</label>
         <input id="measure-input" type="number" step="0.01" style="width:90px; padding:4px 6px; background:var(--panel-2); color:var(--text); border:1px solid var(--line); border-radius:4px;" />
@@ -370,7 +361,7 @@ export function renderTask() {
       if (matchesActual && matchesExpected) {
         completeTask(t);
         fb.className = 'feedback show good';
-        fb.innerHTML = `<b>Correct!</b> ${escapeHtml(t.data.explanation)}`;
+        fb.innerHTML = `<b>Correct!</b> ${actual.toFixed(2)} ${escapeHtml(t.data.targetUnit)} matches the expected reading.`;
       } else if (!matchesActual) {
         fb.className = 'feedback show bad';
         fb.innerHTML = `Your typed value (${userVal.toFixed(2)} ${t.data.targetUnit}) doesn\u2019t match what ${t.data.targetMeter} is showing (${actual.toFixed(2)} ${t.data.targetUnit}). Re-read the meter.`;
@@ -410,15 +401,9 @@ export function renderTask() {
       };
     });
   } else if (t.type === 'scenario') {
-    const pinned = t.data.initial
-      ? `<div class="criteria"><b>Pinned:</b> ${t.data.initial.components.map(c => c.id).join(', ')}</div>`
-      : '';
     card.innerHTML = `
       <div class="pill">Scenario</div>
-      <h4>${escapeHtml(t.data.challenge)}</h4>
-      <p style="color: var(--muted); font-size: 13px; margin: 6px 0;">${escapeHtml(t.data.narrative)}</p>
-      <div class="criteria"><b>Given:</b> ${Object.entries(t.data.parameters || {}).map(([k,v]) => `${k}=${v}`).join(', ')}</div>
-      ${pinned}
+      <p class="task-desc">${escapeHtml(t.data.description || t.data.brief || '')}</p>
       <div class="row">
         <button id="btn-check-scenario">Check my circuit</button>
         ${t.data.initial ? '<button class="ghost" id="btn-reload-scenario">Reset task</button>' : ''}
@@ -447,12 +432,13 @@ export function renderTask() {
     const rel = document.getElementById('btn-reload-scenario');
     if (rel) rel.onclick = () => loadInitialCircuit(t.data.initial, t.id);
   } else if (t.type === 'exploration') {
+    const questions = t.data.guidedQuestions || [];
     card.innerHTML = `
       <div class="pill">Exploration</div>
-      <h4>${escapeHtml(t.data.concept)}</h4>
-      <ol style="color: var(--muted); font-size: 13px; padding-left: 18px;">
-        ${t.data.guidedQuestions.map(q => `<li style="margin-bottom:4px">${escapeHtml(q)}</li>`).join('')}
-      </ol>
+      <p class="task-desc">${escapeHtml(t.data.description || t.data.brief || '')}</p>
+      ${questions.length ? `<ol style="color: var(--muted); font-size: 13px; padding-left: 18px;">
+        ${questions.map(q => `<li style="margin-bottom:4px">${escapeHtml(q)}</li>`).join('')}
+      </ol>` : ''}
       <div class="row">
         <button id="btn-mark-done">Mark as explored</button>
       </div>

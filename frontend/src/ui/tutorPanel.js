@@ -25,7 +25,6 @@ function trimChatIfTooLong() {
 export function clearChat() {
   state.messages = [];
   state.rollingSummary = '';
-  state.lastAnalysis = null;
   const host = document.getElementById('messages');
   if (host) host.innerHTML = '';
 }
@@ -76,7 +75,7 @@ export function appendTutorMsg(payload) {
   const m = document.createElement('div');
   m.className = 'msg tutor-msg ' + (payload.reply_type || 'direct_explanation');
   const who = document.createElement('div');
-  who.className = 'who'; who.textContent = 'Professor Volt · ' + (payload.reply_type || 'reply');
+  who.className = 'who'; who.textContent = 'Professor Volt';
   m.appendChild(who);
   const body = document.createElement('div');
   const raw = payload.assistant_text || '';

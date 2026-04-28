@@ -178,7 +178,6 @@ async function sendOneTutorRequest(combinedMessage) {
     const data = await res.json();
     captureResponse(data);
     const parsed = data.reply || { reply_type:'direct_explanation', assistant_text: 'No reply.' };
-    state.lastAnalysis = data.analysis || null;
     if (typeof parsed.rolling_summary === 'string' && parsed.rolling_summary.trim()) {
       state.rollingSummary = parsed.rolling_summary.trim();
     }
@@ -198,15 +197,16 @@ async function sendOneTutorRequest(combinedMessage) {
 // ("pass" | "fail") alongside the usual coaching reply. Runs out-of-band from
 // the normal chat queue so it doesn't get merged with debounced student turns.
 export async function askTutorCheckScenario(task) {
-  const message = `Please check my circuit — I believe I've solved the scenario: "${task.data.challenge}".`;
+  const headline = task.data.brief || task.data.description || 'this task';
+  const message = `Please check my circuit — I believe I've solved the task: "${headline}".`;
   pushUserMsg(message);
   const thinkingId = appendThinking();
   try {
     const payload = buildUserPayload(message);
     payload.check_request = {
       type: 'scenario_validation',
-      challenge: task.data.challenge || '',
-      narrative: task.data.narrative || '',
+      brief: task.data.brief || '',
+      description: task.data.description || '',
       parameters: task.data.parameters || {},
       success_criteria: task.data.successCriteria || {},
     };
@@ -227,7 +227,6 @@ export async function askTutorCheckScenario(task) {
     const data = await res.json();
     captureResponse(data);
     const parsed = data.reply || { reply_type: 'direct_explanation', assistant_text: 'No reply.' };
-    state.lastAnalysis = data.analysis || null;
     if (typeof parsed.rolling_summary === 'string' && parsed.rolling_summary.trim()) {
       state.rollingSummary = parsed.rolling_summary.trim();
     }

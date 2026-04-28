@@ -11,6 +11,8 @@
 // plus the static system_prompt. The prod UI never sets that flag, so this
 // has zero effect on normal traffic.
 
+import { escapeHtml } from '../tasks/engine.js';
+
 const DEV_FLAG_KEY = 'devMode';
 
 export function isDevMode() {
@@ -188,10 +190,4 @@ function tryFormat(maybeJsonString) {
   if (typeof maybeJsonString !== 'string') return formatJson(maybeJsonString);
   try { return JSON.stringify(JSON.parse(maybeJsonString), null, 2); }
   catch (_) { return maybeJsonString; }
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, ch => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[ch]));
 }

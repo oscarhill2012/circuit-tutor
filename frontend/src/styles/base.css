@@ -101,7 +101,8 @@ button { font-family: inherit; color: inherit; }
    wire stroke beneath. Slightly heavier border than vbar-bg for the same
    reason. */
 .ibar-bg { fill: #1a2440; stroke: #3a466e; stroke-width: 1; }
-.bar-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; }
+.bar-label,
+.comp .bar-label { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
 .bar-label.v { fill: var(--q-v); }
 .bar-label.i { fill: var(--q-i); }
 .bar-label.r { fill: var(--q-r); }

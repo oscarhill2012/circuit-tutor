@@ -257,8 +257,8 @@ Field rules:
 _SCENARIO_PROMPT_SUFFIX = """
 
 # Scenario validation mode
-The user payload contains a non-null `check_request` with `type == "scenario_validation"`. Judge whether the current circuit actually solves the described scenario (use `challenge`, `narrative`, `parameters`, `success_criteria`, plus the server-authoritative `analysis` and `circuit_state`).
-- Set `verdict` to exactly "pass" if the topology, component roles, meter placements, and any numeric targets all match within a reasonable tolerance, or "fail" otherwise.
+The user payload contains a non-null `check_request` with `type == "scenario_validation"`. Judge whether the current circuit actually solves the described task using `brief` (≤8-word premise), `description` (the student-facing goal paragraph), `parameters`, `success_criteria`, plus the server-authoritative `analysis` and `circuit_state`. Note: `description` deliberately does NOT prescribe meter placement or formulas — `success_criteria` carries the strict pass conditions (meter modes, target component, expected numeric values, tolerances) and is authoritative.
+- Set `verdict` to exactly "pass" if the topology, component roles, meter placements, and any numeric targets all match within the tolerances given in `success_criteria`, or "fail" otherwise.
 - Be strict.
 - Keep the response brief and point to the single most useful next fix if failing.
 - Concise verdict language is preferred over extended tutoring.

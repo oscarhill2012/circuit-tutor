@@ -195,6 +195,10 @@
   font-family: 'JetBrains Mono', monospace;
 }
 .task-card h4 { margin: 0 0 var(--space-1); font-size: 0.875rem; }
+.task-card .task-desc {
+  margin: var(--space-1) 0 var(--space-2); font-size: 0.8125rem; line-height: 1.45;
+  color: var(--text);
+}
 .task-card .criteria { color: var(--muted); font-size: 0.75rem; margin-top: var(--space-1); }
 .task-card input {
   flex: 1; background: var(--bg); border: 1px solid var(--line); color: var(--text);
