@@ -196,7 +196,12 @@ async function sendOneTutorRequest(combinedMessage) {
 // solves the given scenario. The tutor returns a structured `verdict` field
 // ("pass" | "fail") alongside the usual coaching reply. Runs out-of-band from
 // the normal chat queue so it doesn't get merged with debounced student turns.
-export async function askTutorCheckScenario(task) {
+//
+// Phase 2 (iter-improv 2026-04-28): for measure tasks the caller passes
+// `extra` with claimed_reading / simulated_reading / reading_status so the
+// LLM can address the reading without re-doing the arithmetic (the local
+// validator already decided whether the reading is correct).
+export async function askTutorCheckScenario(task, extra = {}) {
   const headline = task.data.brief || task.data.description || 'this task';
   const message = `Please check my circuit — I believe I've solved the task: "${headline}".`;
   pushUserMsg(message);
@@ -209,6 +214,7 @@ export async function askTutorCheckScenario(task) {
       description: task.data.description || '',
       parameters: task.data.parameters || {},
       success_criteria: task.data.successCriteria || {},
+      ...extra,
     };
     if (isDevMode()) payload.debug = true;
     captureRequest(payload);

@@ -166,23 +166,21 @@
   overflow: hidden;
 }
 
-/* Floating active-task widget sits at top-center of the canvas while
-   a task is in progress. Hidden in sandbox mode. */
+/* Floating active-task widget sits at top-center of the canvas while a
+   measure or exploration task is in progress. Hidden for scenario tasks
+   (Professor Volt drives those entirely from the right panel) and in
+   sandbox mode. The widget no longer carries description/header chrome —
+   it only houses the interactive controls (input field, action buttons,
+   feedback area). */
 .task-widget {
   position: absolute; top: var(--space-3); left: 50%; transform: translateX(-50%);
-  width: min(720px, calc(100% - 2rem));
+  width: min(560px, calc(100% - 2rem));
   background: rgba(19,26,46,0.95); backdrop-filter: blur(8px);
   border: 1px solid var(--line); border-radius: var(--radius-lg);
-  padding: var(--space-2) var(--space-4); z-index: 6;
+  padding: var(--space-3) var(--space-4); z-index: 6;
   max-height: calc(100% - var(--space-6)); overflow-y: auto;
 }
 .task-widget.hidden { display: none; }
-.task-widget-hd {
-  display:flex; justify-content: space-between; align-items: center;
-  margin-bottom: var(--space-1); font-size: 0.6875rem; letter-spacing: 1px;
-  text-transform: uppercase; color: var(--muted);
-  font-family: 'JetBrains Mono', monospace;
-}
 
 .task-card {
   background: transparent; border: none; border-radius: var(--radius-md);
@@ -276,14 +274,44 @@
   background: var(--violet); color: #1a0b3a; border: none;
   padding: 0 0.875rem; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; font-size: 0.8125rem;
 }
+/* Three side-by-side quick actions: Task reminder · Ask for a hint ·
+   Check my circuit. Each button grows to fill the row equally with a
+   fixed 6px gap between adjacent buttons. The check-my-circuit button
+   carries the primary-action green so it reads as the action that
+   submits the student's work for grading. */
 .tutor-quick {
-  padding: 0 var(--space-3) var(--space-3); display: flex; gap: 0.375rem; flex-wrap: wrap;
+  padding: 0 var(--space-2) var(--space-3);
+  display: flex; gap: 6px; flex-wrap: nowrap;
+  align-items: stretch;
 }
 .tutor-quick button {
+  flex: 1 1 0; min-width: 0;
   background: transparent; border: 1px solid var(--line); color: var(--muted);
-  padding: var(--space-1) var(--space-3); border-radius: var(--radius-pill); cursor: pointer; font-size: 0.6875rem;
+  padding: 0.5rem 0.125rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 0.6875rem; font-weight: 600;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: border-color 120ms, color 120ms, background 120ms;
 }
-.tutor-quick button:hover { border-color: var(--violet); color: var(--text); }
+.tutor-quick button:hover:not(:disabled) {
+  border-color: var(--violet); color: var(--text);
+}
+.tutor-quick button:disabled {
+  opacity: 0.45; cursor: not-allowed;
+}
+.tutor-quick button[data-action="check"] {
+  background: var(--accent); border-color: var(--accent); color: #06291e;
+}
+.tutor-quick button[data-action="check"]:hover:not(:disabled) {
+  background: #2deebd; border-color: #2deebd; color: #06291e;
+}
+.tutor-quick button[data-action="check"]:disabled {
+  /* Keep the green hue when disabled so the visual identity of the action
+     stays recognisable, just dimmer. */
+  background: var(--accent); border-color: var(--accent); color: #06291e;
+}
 
 /* Setup modal */
 .modal {

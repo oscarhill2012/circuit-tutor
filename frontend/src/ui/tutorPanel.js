@@ -2,7 +2,13 @@
 // clear-chat and greet. Also owns the KaTeX inline renderer for $…$ spans.
 
 import { state } from '../state/store.js';
-import { escapeHtml, getActiveTask } from '../tasks/engine.js';
+import {
+  escapeHtml,
+  getActiveTask,
+  remindActiveTask,
+  checkActiveTask,
+  onActiveTaskChange,
+} from '../tasks/engine.js';
 import { askTutor } from '../tutor/api.js';
 
 // Hard cap on in-memory chat length. Prevents unbounded growth of
@@ -117,17 +123,48 @@ export function initTutorPanel() {
   document.getElementById('chat-input').addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') document.getElementById('chat-send').click();
   });
-  // Only a single quick-action remains: ask for a hint. All other
-  // interaction with Professor Volt happens through the typed prompt.
-  document.querySelectorAll('.tutor-quick button').forEach(b => {
-    b.onclick = () => {
+  // Three quick-actions live in the tutor panel: Task reminder (re-states
+  // the aim), Ask for a hint (existing Socratic nudge), and Check my circuit
+  // (drives the scenario-validation flow that used to sit in the floating
+  // task widget).
+  const remindBtn = document.querySelector('.tutor-quick button[data-action="remind"]');
+  const hintBtn   = document.querySelector('.tutor-quick button[data-action="hint"]');
+  const checkBtn  = document.querySelector('.tutor-quick button[data-action="check"]');
+
+  if (remindBtn) {
+    remindBtn.onclick = () => remindActiveTask();
+  }
+  if (hintBtn) {
+    hintBtn.onclick = () => {
       const t = getActiveTask();
       const msg = t
         ? `Give me a single small hint for the current task. Don't tell me the answer.`
         : `I'm exploring in sandbox mode — give me a small prompt or idea to try.`;
       askTutor(msg);
     };
-  });
+  }
+  if (checkBtn) {
+    checkBtn.onclick = async () => {
+      checkBtn.disabled = true;
+      try { await checkActiveTask(); }
+      finally {
+        // Re-evaluate enabled state from current task — completion may have
+        // cleared the active task in the meantime.
+        syncQuickButtons(getActiveTask());
+      }
+    };
+  }
+
+  // Sync button enabled-state with active task: both Task-Reminder and
+  // Check-my-circuit are enabled whenever any task is active (scenario,
+  // measure, or exploration — they each have a meaningful Check action
+  // since iter-improv Phase 2). Disabled buttons remain visible so the
+  // layout doesn't shift between sandbox and active-task modes.
+  function syncQuickButtons(t) {
+    if (remindBtn) remindBtn.disabled = !t;
+    if (checkBtn)  checkBtn.disabled  = !t;
+  }
+  onActiveTaskChange(syncQuickButtons);
   document.getElementById('btn-clear-chat').onclick = () => {
     clearChat();
   };

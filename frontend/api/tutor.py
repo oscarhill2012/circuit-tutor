@@ -257,8 +257,23 @@ Field rules:
 _SCENARIO_PROMPT_SUFFIX = """
 
 # Scenario validation mode
-The user payload contains a non-null `check_request` with `type == "scenario_validation"`. Judge whether the current circuit actually solves the described task using `brief` (≤8-word premise), `description` (the student-facing goal paragraph), `parameters`, `success_criteria`, plus the server-authoritative `analysis` and `circuit_state`. Note: `description` deliberately does NOT prescribe meter placement or formulas — `success_criteria` carries the strict pass conditions (meter modes, target component, expected numeric values, tolerances) and is authoritative.
-- Set `verdict` to exactly "pass" if the topology, component roles, meter placements, and any numeric targets all match within the tolerances given in `success_criteria`, or "fail" otherwise.
+The user payload contains a non-null `check_request`. Judge whether the current circuit actually solves the described task using `brief` (≤8-word premise), `description` (the student-facing goal paragraph), `parameters`, `success_criteria`, plus the server-authoritative `analysis` and `circuit_state`. Note: `description` deliberately does NOT prescribe meter placement or formulas — `success_criteria` carries the strict pass conditions (meter modes, target component, expected numeric values, tolerances) and is authoritative.
+
+If `check_request.claimed_reading` is present, this is a MEASURE task: the student has typed a numeric meter reading in chat and is asking you to verify both the circuit AND the reading. Treat `check_request.reading_status` as the AUTHORITATIVE result of the local arithmetic check on that reading (the server already compared the typed number to the simulation — you do NOT re-do the arithmetic). The status values are:
+- "correct": the typed reading matches both the simulated meter value and the expected target within tolerance.
+- "wrong_value": the typed number disagrees with what the meter actually shows in the simulation. `check_request.simulated_reading` is what the meter is actually showing.
+- "wrong_circuit": the meter shows a value but the topology is not what the task asks for.
+- "shorted" / "open" / "meter_missing": diagnostic states from the simulation; the reading cannot be evaluated yet.
+- "not_a_number": no parseable number was found.
+
+For MEASURE-task validation:
+- Set `verdict` to "pass" only if `reading_status == "correct"` AND the topology / meter placement also match the task. Otherwise "fail".
+- Address BOTH the circuit setup AND the reading in your reply. If the reading is wrong, name the simulated value the meter is actually showing (`simulated_reading` with `target_unit`). If the circuit topology is wrong, name the single most useful next fix.
+- Do NOT contradict `reading_status` with your own arithmetic — the server is authoritative for the reading. Do contradict the circuit-correctness side if the topology genuinely doesn't match the task.
+
+For SCENARIO-task validation (no `claimed_reading`):
+- Set `verdict` to "pass" if the topology, component roles, meter placements, and any numeric targets all match within the tolerances given in `success_criteria`, or "fail" otherwise.
+
 - Be strict.
 - Keep the response brief and point to the single most useful next fix if failing.
 - Concise verdict language is preferred over extended tutoring.

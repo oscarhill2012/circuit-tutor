@@ -50,12 +50,10 @@
   <div class="canvas-wrap">
     <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
     <!-- Floating active-task widget. Populated by tasks/engine.js when a
-         task is picked from the task-loader modal. Hidden in sandbox mode. -->
+         measure or exploration task is picked. Hidden for scenario tasks
+         (Professor Volt drives those entirely) and in sandbox mode. The
+         old description/header chrome has moved to the tutor panel. -->
     <div class="task-widget hidden" id="task-widget">
-      <div class="task-widget-hd">
-        <span id="task-widget-title">Task</span>
-        <button class="iconbtn" id="btn-open-tasks-2" title="Change task">Change</button>
-      </div>
       <div class="task-card" id="task-card"></div>
     </div>
     <div class="readout" id="readout">
@@ -82,7 +80,9 @@
       </div>
       <div class="messages" id="messages"></div>
       <div class="tutor-quick">
-        <button>Ask for a hint</button>
+        <button data-action="remind">Task reminder</button>
+        <button data-action="hint">Ask for a hint</button>
+        <button data-action="check">Check my circuit</button>
       </div>
       <div class="tutor-input">
         <input id="chat-input" placeholder="Ask Professor Volt…" />

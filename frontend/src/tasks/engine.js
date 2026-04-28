@@ -255,9 +255,8 @@ export function closeTaskModal() {
 function hideTaskWidget() {
   document.getElementById('task-widget').classList.add('hidden');
 }
-function showTaskWidget(titleText) {
+function showTaskWidget() {
   document.getElementById('task-widget').classList.remove('hidden');
-  document.getElementById('task-widget-title').textContent = titleText;
 }
 
 export function enterSandbox() {
@@ -266,6 +265,7 @@ export function enterSandbox() {
   closeTaskModal();
   clearChat();
   clearCircuit();
+  notifyActiveTaskChange();
   appendTutorMsg({
     reply_type: 'direct_explanation',
     assistant_text: "You're in sandbox mode — build whatever you like. Feel free to ask any questions if you find anything interesting or confusing you'd like to discuss.",
@@ -286,29 +286,50 @@ export function startTask(taskId) {
   } else {
     clearCircuit();
   }
-  showTaskWidget(`${t.topicName} · ${t.difficulty}`);
+  // Phase 2 (iter-improv 2026-04-28): all task types are now driven from
+  // Professor Volt's panel — the floating top-of-canvas widget is hidden
+  // for every task type. The widget DOM stays for legacy reasons (and the
+  // canvas tooling that targets the canvas-wrap layer), but renders empty.
+  hideTaskWidget();
   renderTask();
   introduceTask(t);
+  notifyActiveTaskChange();
 }
 
 // Seed Professor Volt with the task aim. This is NOT a Socratic question —
 // it simply states the goal so the student knows what they're working on.
-// Further replies from the tutor remain Socratic.
-function introduceTask(t) {
-  let text = '';
-  const header = `New task — **${t.topicName}** (${t.difficulty}).`;
+// Further replies from the tutor remain Socratic. The intro message starts
+// with "AIM:" rather than a "New task — Topic (difficulty)" header so the
+// reminder action (which re-runs this) can produce the same shape.
+function buildTaskIntro(t) {
   const aim = t.data.description || t.data.brief || '';
   if (t.type === 'measure') {
-    text = `${header}\n\nAim: ${aim}\n\nBuild the circuit, then tell me the reading or ask for a hint if you get stuck.`;
-  } else if (t.type === 'problem') {
-    text = `${header}\n\nAim: work out the answer to this question — ${t.data.question}\n\nPick an option in the task panel when you're ready, or ask me for a hint.`;
-  } else if (t.type === 'scenario') {
-    text = `${header}\n\nAim: ${aim}\n\nBuild it and hit "Check my circuit" when you think it's right.`;
-  } else if (t.type === 'exploration') {
-    const first = (t.data.guidedQuestions && t.data.guidedQuestions[0]) || '';
-    text = `New exploration — **${t.topicName}**.\n\n${aim}${first ? '\n\nStart with this: ' + first : ''}\n\nThere's no single right answer — tell me what you notice.`;
+    return `AIM: ${aim}\n\nBuild the circuit, then tell me the reading or ask for a hint if you get stuck.`;
   }
-  appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: text });
+  if (t.type === 'problem') {
+    return `AIM: work out the answer to this question — ${t.data.question}\n\nPick an option in the task panel when you're ready, or ask me for a hint.`;
+  }
+  if (t.type === 'scenario') {
+    return `AIM: ${aim}\n\nBuild it and hit "Check my circuit" when you think it's right.`;
+  }
+  if (t.type === 'exploration') {
+    const first = (t.data.guidedQuestions && t.data.guidedQuestions[0]) || '';
+    return `AIM: ${aim}${first ? '\n\nStart with this: ' + first : ''}\n\nThere's no single right answer — tell me what you notice.`;
+  }
+  return `AIM: ${aim}`;
+}
+
+function introduceTask(t) {
+  appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: buildTaskIntro(t) });
+}
+
+// Re-state the current task aim. Same content as the opening message —
+// no "New task — …" header. Wired to the Task-Reminder button in the
+// Professor Volt panel.
+export function remindActiveTask() {
+  const t = getActiveTask();
+  if (!t) return;
+  appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: buildTaskIntro(t) });
 }
 
 export function renderTask() {
@@ -320,61 +341,13 @@ export function renderTask() {
   const done = state.tasksCompleted.has(t.id);
 
   if (t.type === 'measure') {
-    card.innerHTML = `
-      <div class="pill">Build &amp; measure</div>
-      <p class="task-desc">${escapeHtml(t.data.description || t.data.brief || '')}</p>
-      <div class="row" style="align-items:center; gap:8px;">
-        <label style="font-size:13px; color:var(--muted);">Your ${t.data.targetMeter} reading:</label>
-        <input id="measure-input" type="number" step="0.01" style="width:90px; padding:4px 6px; background:var(--panel-2); color:var(--text); border:1px solid var(--line); border-radius:4px;" />
-        <span style="color:var(--muted);">${t.data.targetUnit}</span>
-      </div>
-      <div class="row">
-        <button id="btn-check-measure">Check answer</button>
-        <button class="ghost" id="btn-reload-task">Reset task</button>
-      </div>
-      <div class="feedback" id="feedback"></div>
-    `;
-    document.getElementById('btn-check-measure').onclick = () => {
-      const fb = document.getElementById('feedback');
-      const input = document.getElementById('measure-input');
-      const userVal = parseFloat(input.value);
-      if (!isFinite(userVal)) {
-        fb.className = 'feedback show bad';
-        fb.textContent = 'Enter the reading shown on ' + t.data.targetMeter + '.';
-        return;
-      }
-      const sim = state.sim;
-      const meter = state.components.find(c => c.id === t.data.targetMeter);
-      const simEl = sim && sim.ok && !sim.empty ? sim.elementByCompId.get(t.data.targetMeter) : null;
-      if (!meter || !simEl) {
-        fb.className = 'feedback show bad';
-        fb.textContent = 'I can\u2019t see ' + t.data.targetMeter + ' in the circuit yet \u2014 add it or connect it.';
-        return;
-      }
-      if (sim.isShort) { fb.className = 'feedback show bad'; fb.textContent = 'The circuit is shorted \u2014 add a bulb or resistor in the loop.'; return; }
-      if (sim.isOpen)  { fb.className = 'feedback show bad'; fb.textContent = 'The circuit is open \u2014 check for a missing wire.'; return; }
-
-      const actual = meter.type === 'ammeter' ? Math.abs(simEl.current) : Math.abs(simEl.drop);
-      const matchesActual = Math.abs(userVal - actual) < 0.05;
-      const matchesExpected = Math.abs(actual - t.data.correctAnswer) < t.data.tolerance;
-
-      if (matchesActual && matchesExpected) {
-        completeTask(t);
-        fb.className = 'feedback show good';
-        fb.innerHTML = `<b>Correct!</b> ${actual.toFixed(2)} ${escapeHtml(t.data.targetUnit)} matches the expected reading.`;
-      } else if (!matchesActual) {
-        fb.className = 'feedback show bad';
-        fb.innerHTML = `Your typed value (${userVal.toFixed(2)} ${t.data.targetUnit}) doesn\u2019t match what ${t.data.targetMeter} is showing (${actual.toFixed(2)} ${t.data.targetUnit}). Re-read the meter.`;
-      } else {
-        fb.className = 'feedback show bad';
-        fb.innerHTML = `The meter reads ${actual.toFixed(2)} ${t.data.targetUnit}, but the circuit isn\u2019t what the task asks for. Check the wiring.`;
-      }
-    };
-    document.getElementById('btn-reload-task').onclick = () => loadInitialCircuit(t.data.initial, t.id);
+    // Phase 2 (iter-improv 2026-04-28): measure tasks are now driven entirely
+    // from Professor Volt's panel \u2014 the student types their reading in chat
+    // and clicks "Check my circuit". The widget renders nothing.
+    card.innerHTML = '';
   } else if (t.type === 'problem') {
     const opts = shuffleSeed([t.data.correctAnswer, ...t.data.distractors], t.id);
     card.innerHTML = `
-      <div class="pill">Problem</div>
       <h4>${escapeHtml(t.data.question)}</h4>
       <div class="mc" id="mc-opts">
         ${opts.map((o) => `<button data-val="${o}">${o} ${t.data.unit}</button>`).join('')}
@@ -401,49 +374,14 @@ export function renderTask() {
       };
     });
   } else if (t.type === 'scenario') {
-    card.innerHTML = `
-      <div class="pill">Scenario</div>
-      <p class="task-desc">${escapeHtml(t.data.description || t.data.brief || '')}</p>
-      <div class="row">
-        <button id="btn-check-scenario">Check my circuit</button>
-        ${t.data.initial ? '<button class="ghost" id="btn-reload-scenario">Reset task</button>' : ''}
-      </div>
-      <div class="feedback" id="feedback"></div>
-    `;
-    document.getElementById('btn-check-scenario').onclick = async () => {
-      const fb = document.getElementById('feedback');
-      const btn = document.getElementById('btn-check-scenario');
-      btn.disabled = true;
-      fb.className = 'feedback show';
-      fb.textContent = 'Asking Professor Volt to review your circuit…';
-      try {
-        const { verdict, reply } = await askTutorCheckScenario(t);
-        const passed = verdict === 'pass';
-        fb.className = 'feedback show ' + (passed ? 'good' : 'bad');
-        const msg = reply && reply.assistant_text ? reply.assistant_text : '';
-        fb.innerHTML = passed
-          ? `<b>Approved by Professor Volt.</b> ${escapeHtml(msg)}`
-          : (msg ? escapeHtml(msg) : 'Not quite — check Professor Volt\'s reply in the chat.');
-        if (passed) completeTask(t);
-      } finally {
-        btn.disabled = false;
-      }
-    };
-    const rel = document.getElementById('btn-reload-scenario');
-    if (rel) rel.onclick = () => loadInitialCircuit(t.data.initial, t.id);
+    // Scenario tasks are driven entirely from Professor Volt's panel:
+    // Check-my-circuit lives there, the description lives in the intro
+    // message, the widget is hidden in startTask(). The card stays empty.
+    card.innerHTML = '';
   } else if (t.type === 'exploration') {
-    const questions = t.data.guidedQuestions || [];
-    card.innerHTML = `
-      <div class="pill">Exploration</div>
-      <p class="task-desc">${escapeHtml(t.data.description || t.data.brief || '')}</p>
-      ${questions.length ? `<ol style="color: var(--muted); font-size: 13px; padding-left: 18px;">
-        ${questions.map(q => `<li style="margin-bottom:4px">${escapeHtml(q)}</li>`).join('')}
-      </ol>` : ''}
-      <div class="row">
-        <button id="btn-mark-done">Mark as explored</button>
-      </div>
-    `;
-    document.getElementById('btn-mark-done').onclick = () => completeTask(t);
+    // Phase 2 (iter-improv 2026-04-28): exploration tasks use the
+    // Check-my-circuit button as "I'm done exploring". The widget is hidden.
+    card.innerHTML = '';
   }
   if (done) {
     const fb = card.querySelector('#feedback');
@@ -457,8 +395,124 @@ function completeTask(t) {
   setTimeout(() => {
     hideTaskWidget();
     activeTaskId = null;
+    notifyActiveTaskChange();
     openTaskModal();
   }, 3000);
+}
+
+// Drives the "Check my circuit" button (lives in Professor Volt's panel).
+// Phase 2 (iter-improv 2026-04-28) extends the dispatch beyond scenario
+// tasks: measure tasks merge a local-deterministic reading check with the
+// LLM circuit verdict; exploration tasks complete immediately. Returns the
+// final verdict so callers can react; the tutor reply (when the backend is
+// involved) is appended to the chat by askTutorCheckScenario.
+export async function checkActiveTask() {
+  const t = getActiveTask();
+  if (!t) return null;
+
+  if (t.type === 'exploration') {
+    completeTask(t);
+    return 'pass';
+  }
+
+  if (t.type === 'measure') {
+    const userVal = extractReadingFromChat();
+    if (userVal === null) {
+      // Fallback: no numeric reading in the latest user message → ask for one.
+      // No backend call, no completion — once the student types a number and
+      // re-clicks Check, we proceed into validation.
+      const meterLabel = t.data.targetMeter || 'the meter';
+      const unit = t.data.targetUnit ? ` (in ${t.data.targetUnit})` : '';
+      appendTutorMsg({
+        reply_type: 'direct_explanation',
+        assistant_text: `What reading did you get from ${meterLabel}${unit}? Type the number in the chat and I'll check it.`,
+      });
+      return null;
+    }
+    const reading = validateMeasureReading(t, userVal);
+    const { verdict } = await askTutorCheckScenario(t, {
+      claimed_reading: userVal,
+      simulated_reading: (reading.actual !== undefined && reading.actual !== null) ? reading.actual : null,
+      reading_status: reading.status,
+      target_meter: t.data.targetMeter,
+      target_unit: t.data.targetUnit,
+      expected: t.data.correctAnswer,
+      tolerance: t.data.tolerance,
+    });
+    // Local arithmetic check is authoritative for the reading; LLM verdict is
+    // authoritative for the topology. Both must pass for the task to count.
+    const finalVerdict = (verdict === 'pass' && reading.status === 'correct') ? 'pass' : 'fail';
+    if (finalVerdict === 'pass') completeTask(t);
+    return finalVerdict;
+  }
+
+  if (t.type === 'scenario') {
+    const { verdict } = await askTutorCheckScenario(t);
+    if (verdict === 'pass') completeTask(t);
+    return verdict;
+  }
+
+  return null;
+}
+
+// Local-deterministic measure-task validator. Returns the simulation's actual
+// meter reading and a status string consumed by both the verdict-merge logic
+// in checkActiveTask() and the LLM prompt suffix on the backend (so the model
+// can address the reading without re-doing the arithmetic).
+function validateMeasureReading(t, userVal) {
+  if (!isFinite(userVal)) return { status: 'not_a_number' };
+  const sim = state.sim;
+  const meter = state.components.find(c => c.id === t.data.targetMeter);
+  const simEl = sim && sim.ok && !sim.empty ? sim.elementByCompId.get(t.data.targetMeter) : null;
+  if (!meter || !simEl) return { status: 'meter_missing' };
+  if (sim.isShort) return { status: 'shorted' };
+  if (sim.isOpen) return { status: 'open' };
+  const actual = meter.type === 'ammeter' ? Math.abs(simEl.current) : Math.abs(simEl.drop);
+  const matchesActual = Math.abs(userVal - actual) < 0.05;
+  const matchesExpected = Math.abs(actual - t.data.correctAnswer) < t.data.tolerance;
+  if (matchesActual && matchesExpected) return { status: 'correct', actual };
+  if (!matchesActual) return { status: 'wrong_value', actual };
+  return { status: 'wrong_circuit', actual };
+}
+
+// Walk state.messages backwards for the most recent student-typed numeric
+// reading. The auto-generated "Please check my circuit — …" turn that
+// askTutorCheckScenario pushes is skipped (otherwise a re-click of the
+// Check button would treat the auto-message as "the latest student turn"
+// and either find no number or accidentally pick up a numeric token from
+// the task brief). Returns null if no genuine student turn carries a number.
+const _AUTO_CHECK_PREFIX = "Please check my circuit";
+function extractReadingFromChat() {
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    const m = state.messages[i];
+    if (m.role !== 'user') continue;
+    const text = String(m.content || '');
+    if (text.startsWith(_AUTO_CHECK_PREFIX)) continue;
+    const match = text.match(/-?\d+(?:\.\d+)?/);
+    if (match) return parseFloat(match[0]);
+    // Found a genuine (non-auto) student turn with no number → caller
+    // should fall back to asking. Don't keep walking past it.
+    return null;
+  }
+  return null;
+}
+
+// Active-task change notifications. The tutor panel uses this to enable
+// or disable the Task-Reminder and Check-my-circuit buttons depending on
+// whether a task is active (and whether it is a scenario task).
+const activeTaskListeners = new Set();
+export function onActiveTaskChange(fn) {
+  activeTaskListeners.add(fn);
+  // Fire once with the current state so the listener can render itself
+  // immediately rather than waiting for the next change.
+  try { fn(getActiveTask()); } catch {}
+  return () => activeTaskListeners.delete(fn);
+}
+function notifyActiveTaskChange() {
+  const t = getActiveTask();
+  for (const fn of activeTaskListeners) {
+    try { fn(t); } catch {}
+  }
 }
 
 export function initTaskControls() {
