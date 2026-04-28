@@ -213,6 +213,17 @@ export function render() {
       }
     }
   }
+  // Reference current for normalising flow speed: max |I| across all elements
+  // this render. Falls back to supplyV if no comps yet. Used to set
+  // `--flow-dur` per active wire so wires carrying more current visibly cycle
+  // their dashes faster than wires with a trickle.
+  let refCurrent = 0;
+  if (showCurrent) {
+    for (const e of state.sim.elements) {
+      const a = Math.abs(e.current);
+      if (a > refCurrent) refCurrent = a;
+    }
+  }
   const wireInfos = [];
   for (const w of state.wires) {
     // During a drag, route the live wires without writing to w.path so a
@@ -222,6 +233,8 @@ export function render() {
     const fullPts = isLive ? dragPreviewPts(w) : pts;
     if (!fullPts || fullPts.length < 2) continue;
     let cls = 'wire';
+    let flowDur = null;     // seconds — null = inactive
+    let currentMag = 0;
     if (Sel.matches(state.selection, SelKind.WIRE, w.id)) cls += ' selected';
     if (showCurrent) {
       const nodeA = state.sim.getNodeByEp ? state.sim.getNodeByEp(w.a) : state.sim.getNode(w.a.compId, w.a.term);
@@ -231,9 +244,25 @@ export function render() {
         const Va = state.sim.nodes && nodeA !== undefined ? state.sim.nodes[nodeA] : undefined;
         const Vb = state.sim.nodes && nodeB !== undefined ? state.sim.nodes[nodeB] : undefined;
         if (Va !== undefined && Vb !== undefined && Vb > Va) cls += ' reverse';
+        // Pick a representative current magnitude for this wire — try the
+        // attached component on either end, falling back to the global max
+        // when both ends sit on junctions.
+        const elA = w.a.compId ? state.sim.elementByCompId.get(w.a.compId) : null;
+        const elB = w.b.compId ? state.sim.elementByCompId.get(w.b.compId) : null;
+        currentMag = Math.max(
+          elA ? Math.abs(elA.current) : 0,
+          elB ? Math.abs(elB.current) : 0,
+        );
+        if (currentMag <= 0) currentMag = refCurrent;
+        const norm = refCurrent > 0 ? Math.min(1, currentMag / refCurrent) : 0;
+        // Fast at high current, slow at low current. 0.55s..2.4s.
+        flowDur = +(2.4 - 1.85 * norm).toFixed(2);
       }
     }
-    wireInfos.push({ w, drawPts: fullPts, cls, isHovered: editor.hoveredWireId === w.id });
+    wireInfos.push({
+      w, drawPts: fullPts, cls, flowDur,
+      isHovered: editor.hoveredWireId === w.id,
+    });
   }
   reconcile(
     wiresG,
@@ -321,8 +350,21 @@ export function render() {
 
 // Build a fresh <g.wire-group> for a wire. Used by reconcile() when no
 // existing node is found for this wire id.
+//
+// A wire is rendered as TWO layered visible paths plus a fat invisible hit
+// path:
+//   * .wire-base — solid, continuous, dim. Always shown so the conductor
+//     reads as unbroken even when the flow overlay's dashes happen to land
+//     across a corner.
+//   * .wire-flow — bright dashed overlay, animated via stroke-dashoffset.
+//     Only carries class "active" when current flows; the dasharray stays
+//     attached so deactivation simply hides the overlay (CSS opacity 0).
+//   * .wire-hover-hit — fat transparent hit target for pointer events.
+//
+// The class list (selected / active / reverse) lives on .wire-flow so the
+// existing CSS selectors keep working.
 function buildWireGroup(info) {
-  const { w, drawPts, cls, isHovered } = info;
+  const { w, drawPts, cls, flowDur, isHovered } = info;
   const d = toSvgPath(drawPts);
   const wireGroup = svgEl('g', {
     class: 'wire-group',
@@ -335,11 +377,22 @@ function buildWireGroup(info) {
       setSelection(Sel.wire(w.id));
     },
   });
+  // Base path — always solid, never dashed. Selected/hover state lives here.
+  const baseCls = 'wire-base' + (cls.includes('selected') ? ' selected' : '');
   wireGroup.appendChild(svgEl('path', {
-    class: cls, d,
+    class: baseCls, d,
     'data-wid': w.id,
-    'data-role': 'visible',
+    'data-role': 'base',
   }));
+  // Flow overlay — bright dashed layer. Hidden when no current flows.
+  const flowCls = cls.replace(/\bwire\b/, 'wire-flow').trim();
+  const flowAttrs = {
+    class: flowCls, d,
+    'data-wid': w.id,
+    'data-role': 'flow',
+  };
+  if (flowDur != null) flowAttrs.style = `--flow-dur:${flowDur}s`;
+  wireGroup.appendChild(svgEl('path', flowAttrs));
   wireGroup.appendChild(svgEl('path', {
     class: 'wire-hover-hit',
     d, fill: 'none', stroke: 'transparent', 'stroke-width': 16,
@@ -351,16 +404,18 @@ function buildWireGroup(info) {
 }
 
 // Patch an existing wire group in place. Class-only changes touch a single
-// attribute; geometry changes also rewrite the two `d`s and refresh the
+// attribute; geometry changes also rewrite the three `d`s and refresh the
 // hover dots so they stay glued to the new corner positions.
 function updateWireGroup(node, info) {
-  const { w, drawPts, cls, isHovered } = info;
+  const { w, drawPts, cls, flowDur, isHovered } = info;
   const d = toSvgPath(drawPts);
-  const visible = node.querySelector(':scope > path[data-role="visible"]');
-  const hit = node.querySelector(':scope > path[data-role="hit"]');
-  if (!visible || !hit) return buildWireGroup(info); // unexpected shape — rebuild
-  if (visible.getAttribute('d') !== d) {
-    visible.setAttribute('d', d);
+  const base = node.querySelector(':scope > path[data-role="base"]');
+  const flow = node.querySelector(':scope > path[data-role="flow"]');
+  const hit  = node.querySelector(':scope > path[data-role="hit"]');
+  if (!base || !flow || !hit) return buildWireGroup(info); // unexpected shape — rebuild
+  if (base.getAttribute('d') !== d) {
+    base.setAttribute('d', d);
+    flow.setAttribute('d', d);
     hit.setAttribute('d', d);
     // Corner positions moved — reset and re-add if currently hovered.
     node.querySelectorAll('.wire-corner, .wire-corner-hit').forEach(n => n.remove());
@@ -376,7 +431,15 @@ function updateWireGroup(node, info) {
       node.querySelectorAll('.wire-corner, .wire-corner-hit').forEach(n => n.remove());
     }
   }
-  if (visible.getAttribute('class') !== cls) visible.setAttribute('class', cls);
+  const baseCls = 'wire-base' + (cls.includes('selected') ? ' selected' : '');
+  if (base.getAttribute('class') !== baseCls) base.setAttribute('class', baseCls);
+  const flowCls = cls.replace(/\bwire\b/, 'wire-flow').trim();
+  if (flow.getAttribute('class') !== flowCls) flow.setAttribute('class', flowCls);
+  const flowStyle = flowDur != null ? `--flow-dur:${flowDur}s` : '';
+  if ((flow.getAttribute('style') || '') !== flowStyle) {
+    if (flowStyle) flow.setAttribute('style', flowStyle);
+    else flow.removeAttribute('style');
+  }
   return node;
 }
 
@@ -442,13 +505,51 @@ function appendHoverDots(g, w, pts) {
   }
 }
 
+// Tracks the previous `closed` state of every switch so renderComponent can
+// detect a flip and trigger a one-shot snap+spark animation. Cleared
+// implicitly when a switch is deleted because the next render won't read it.
+const _prevSwitchClosed = new Map();
+
 export function renderComponent(c) {
   const isLocked = state.lockedIds && state.lockedIds.has(c.id);
   const vis = state.visuals && state.visuals[c.id];
   const visCls = vis ? ' tutor-' + vis.action : '';
+
+  // Physics-derived per-component CSS variables. These power the slow
+  // shimmer + warm/lume effects in base.css. Computed once before the SVG
+  // group is built so we can write them in a single style="" attribute.
+  const simEl = state.sim && state.sim.ok ? state.sim.elementByCompId.get(c.id) : null;
+  const power = simEl ? Math.abs((simEl.current || 0) * (simEl.drop || 0)) : 0;
+  // Reference power: the supply's V × max-element-current — gives a sensible
+  // 0..1 normalisation across most circuits in the curriculum.
+  let refPower = 0;
+  if (state.sim && state.sim.ok && !state.sim.empty) {
+    refPower = Math.max(0.0001,
+      (state.sim.supplyV || 0) * (state.sim.totalI || 0));
+  }
+  const heat = refPower > 0 ? Math.min(1, power / refPower) : 0;
+  const lume = refPower > 0 ? Math.min(1, power / (refPower * 0.6)) : 0;
+  const supply = (c.type === 'cell' || c.type === 'battery')
+    && state.sim && state.sim.ok && !state.sim.empty && !state.sim.isOpen
+    && (state.sim.totalI || 0) > 1e-4 ? 1 : 0;
+
+  let extraCls = '';
+  // Switch flip detection — set the previous state to current state by the
+  // end of this render. If they disagree we tag the comp with a transient
+  // class so the CSS arm-rotation + spark keyframes fire once.
+  if (c.type === 'switch') {
+    const prev = _prevSwitchClosed.get(c.id);
+    if (prev !== undefined && prev !== c.props.closed) {
+      extraCls += c.props.closed ? ' switch-snap-closed' : ' switch-snap-open';
+    }
+    _prevSwitchClosed.set(c.id, !!c.props.closed);
+  }
+
+  const styleParts = [`--heat:${heat.toFixed(3)}`, `--lume:${lume.toFixed(3)}`, `--supply:${supply}`];
   const g = svgEl('g', {
-    class: 'comp' + (Sel.matches(state.selection, SelKind.COMPONENT, c.id) ? ' selected' : '') + (isLocked ? ' locked' : '') + visCls,
+    class: 'comp' + (Sel.matches(state.selection, SelKind.COMPONENT, c.id) ? ' selected' : '') + (isLocked ? ' locked' : '') + visCls + extraCls,
     transform: `translate(${c.x}, ${c.y}) scale(${COMP_SCALE})`,
+    style: styleParts.join('; '),
     'data-cid': c.id,
     onpointerdown: (ev) => onCompMouseDown(ev, c),
     onclick: (ev) => {
@@ -466,8 +567,6 @@ export function renderComponent(c) {
     rx: 10, ry: 10, fill: 'transparent', stroke: 'transparent'
   }));
 
-  const simEl = state.sim && state.sim.ok ? state.sim.elementByCompId.get(c.id) : null;
-
   if (c.type === 'cell' || c.type === 'battery') {
     const w = c.type === 'battery' ? 80 : 60;
     const n = c.type === 'battery' ? 2 : 1;
@@ -480,6 +579,11 @@ export function renderComponent(c) {
       g.appendChild(svgEl('line', { class:'body', x1:sx, y1:-14, x2:sx, y2:14 }));
       g.appendChild(svgEl('line', { class:'body', x1:sx+10, y1:-8, x2:sx+10, y2:8 }));
     }
+    // Faint pulsing dots at each end of the cell — only visible while the
+    // battery is actually sourcing current. The `.term-pulse` keyframe in
+    // base.css drives the breathing glow; --supply gates visibility.
+    g.appendChild(svgEl('circle', { class: 'term-pulse pos', cx: -w/2, cy: 0, r: 3 }));
+    g.appendChild(svgEl('circle', { class: 'term-pulse neg', cx:  w/2, cy: 0, r: 3 }));
     if (state.toggles.labels) {
       g.appendChild(svgEl('text', { x:-w/2+4, y:-16, class:'label' }, '+'));
       g.appendChild(svgEl('text', { x: w/2-10, y:-16, class:'label' }, '−'));
@@ -489,10 +593,37 @@ export function renderComponent(c) {
   } else if (c.type === 'switch') {
     g.appendChild(svgEl('line', { class:'body', x1:-30, y1:0, x2:-12, y2:0 }));
     g.appendChild(svgEl('line', { class:'body', x1:12, y1:0, x2:30, y2:0 }));
-    g.appendChild(svgEl('circle', { class:'fill', cx:-12, cy:0, r:3 }));
+    g.appendChild(svgEl('circle', { class:'fill pivot', cx:-12, cy:0, r:3 }));
     g.appendChild(svgEl('circle', { class:'fill', cx:12, cy:0, r:3 }));
-    if (c.props.closed) g.appendChild(svgEl('line', { class:'body', x1:-12, y1:0, x2:12, y2:0 }));
-    else g.appendChild(svgEl('line', { class:'body', x1:-12, y1:0, x2:10, y2:-14 }));
+    // The lever arm is wrapped in its own <g> with a pivot at (-12, 0) so a
+    // CSS rotation animates it like a snap-action toggle. Closed → arm at
+    // 0deg; open → arm rotated upward. The CSS classes
+    // .switch-snap-closed / .switch-snap-open run a brief overshoot.
+    const arm = svgEl('g', { class: 'switch-arm' });
+    if (c.props.closed) arm.appendChild(svgEl('line', { class:'body arm', x1:-12, y1:0, x2:12, y2:0 }));
+    else arm.appendChild(svgEl('line', { class:'body arm', x1:-12, y1:0, x2:10, y2:-14 }));
+    g.appendChild(arm);
+    // One-shot spark group — only emitted on the very render where the
+    // switch was just flipped. The CSS animation removes itself by ending
+    // at opacity 0 (the next render rebuilds without it).
+    if (extraCls.includes('switch-snap')) {
+      const spark = svgEl('g', { class: 'switch-spark' });
+      // Three short radial flares + a central flash at the closing contact.
+      const cx = c.props.closed ? 0 : -12;
+      spark.appendChild(svgEl('circle', { class: 'spark-core', cx, cy: 0, r: 2 }));
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2 + 0.3;
+        const r1 = 3, r2 = 9;
+        spark.appendChild(svgEl('line', {
+          class: 'spark-ray',
+          x1: cx + Math.cos(ang) * r1,
+          y1:      Math.sin(ang) * r1,
+          x2: cx + Math.cos(ang) * r2,
+          y2:      Math.sin(ang) * r2,
+        }));
+      }
+      g.appendChild(spark);
+    }
     if (state.toggles.labels) {
       g.appendChild(svgEl('text', { x:0, y: bh/2 + 14, 'text-anchor':'middle', class:'val' }, c.props.closed ? 'closed' : 'open'));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 4, 'text-anchor':'middle', class:'label' }, c.id));
@@ -501,6 +632,12 @@ export function renderComponent(c) {
     g.appendChild(svgEl('line', { class:'body', x1:-40, y1:0, x2:-20, y2:0 }));
     g.appendChild(svgEl('rect', { class:'fill', x:-20, y:-10, width:40, height:20, rx:2 }));
     g.appendChild(svgEl('line', { class:'body', x1:20, y1:0, x2:40, y2:0 }));
+    // Warm-halo overlay — visible only when --heat > 0 (CSS uses opacity
+    // proportional to heat). Sits on top of the body rectangle so the warm
+    // tint reads as the resistor heating up rather than a separate part.
+    g.appendChild(svgEl('rect', {
+      class: 'r-heat', x: -22, y: -12, width: 44, height: 24, rx: 4,
+    }));
     if (state.toggles.labels) {
       g.appendChild(svgEl('text', { x:0, y: 4, 'text-anchor':'middle', class:'val r' }, `${Math.round(c.props.resistance)}Ω`));
       g.appendChild(svgEl('text', { x:0, y: -bh/2 - 4, 'text-anchor':'middle', class:'label' }, c.id));
@@ -511,8 +648,8 @@ export function renderComponent(c) {
     g.appendChild(svgEl('line', { class:'body', x1:14, y1:0, x2:30, y2:0 }));
     g.appendChild(svgEl('circle', { class:'fill', cx:0, cy:0, r:14 }));
     if (brightness > 0.02) {
-      g.appendChild(svgEl('circle', { cx:0, cy:0, r: 14 + brightness*8, fill:`rgba(255,207,92,${0.3 + 0.5*brightness})`, 'stroke':'none' }));
-      g.appendChild(svgEl('circle', { cx:0, cy:0, r: 10, fill:`rgba(255,235,150,${brightness})`, 'stroke':'none' }));
+      g.appendChild(svgEl('circle', { class: 'bulb-halo bulb-halo-outer', cx:0, cy:0, r: 14 + brightness*8, fill:`rgba(255,207,92,${0.3 + 0.5*brightness})`, 'stroke':'none' }));
+      g.appendChild(svgEl('circle', { class: 'bulb-halo bulb-halo-inner', cx:0, cy:0, r: 10, fill:`rgba(255,235,150,${brightness})`, 'stroke':'none' }));
     }
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:-9, x2:9, y2:9 }));
     g.appendChild(svgEl('line', { class:'body', x1:-9, y1:9, x2:9, y2:-9 }));
@@ -538,9 +675,15 @@ export function renderComponent(c) {
       class: 'meter-lcd-bg' + (isA ? '' : ' v'),
       x: -lcdW/2, y: lcdY, width: lcdW, height: lcdH, rx: 3,
     }));
+    // True geometric centring of the readout: anchor at the box centre
+    // (x=0, y=lcdY+lcdH/2) with both axes' anchors set to middle/central
+    // so the glyph cell is symmetric around that point regardless of
+    // font metrics. Old code used text-anchor="end" with hand-rolled
+    // padding which left the digits offset right + up.
     g.appendChild(svgEl('text', {
-      x: lcdW/2 - 4, y: lcdY + lcdH - 5,
-      'text-anchor': 'end',
+      x: 0, y: lcdY + lcdH/2,
+      'text-anchor': 'middle',
+      'dominant-baseline': 'central',
       class: 'meter-lcd-text' + (isA ? '' : ' v'),
     }, digits + unit));
 
@@ -990,10 +1133,12 @@ export function applyDragFrame(ctx) {
     const d = toSvgPath(drawPts);
     const wireG = wiresG.querySelector(`g.wire-group[data-wid="${w.id}"]`);
     if (!wireG) continue;
-    const visible = wireG.querySelector(':scope > path[data-role="visible"]');
-    const hit = wireG.querySelector(':scope > path[data-role="hit"]');
-    if (visible) visible.setAttribute('d', d);
-    if (hit) hit.setAttribute('d', d);
+    const base = wireG.querySelector(':scope > path[data-role="base"]');
+    const flow = wireG.querySelector(':scope > path[data-role="flow"]');
+    const hit  = wireG.querySelector(':scope > path[data-role="hit"]');
+    if (base) base.setAttribute('d', d);
+    if (flow) flow.setAttribute('d', d);
+    if (hit)  hit.setAttribute('d', d);
   }
 }
 
@@ -1028,10 +1173,10 @@ export function setSelection(sel) {
 function applySelectionClasses() {
   const sel = state.selection;
   if (wiresG) {
-    wiresG.querySelectorAll('path.wire.selected').forEach(n => n.classList.remove('selected'));
+    wiresG.querySelectorAll('path.wire-base.selected').forEach(n => n.classList.remove('selected'));
     if (Sel.isWire(sel)) {
-      const path = wiresG.querySelector(`g.wire-group[data-wid="${sel.id}"] path.wire`);
-      if (path) path.classList.add('selected');
+      const base = wiresG.querySelector(`g.wire-group[data-wid="${sel.id}"] path.wire-base`);
+      if (base) base.classList.add('selected');
     }
   }
   if (compsG) {

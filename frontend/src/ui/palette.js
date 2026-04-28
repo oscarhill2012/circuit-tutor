@@ -63,6 +63,18 @@ export function hidePaletteTooltip() {
   paletteTip?.classList.remove('show');
 }
 
+// Fire a short mint-violet zap from the cursor when the student grabs a
+// tile. The element removes itself when the CSS animation finishes.
+function fireSpark(host) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const s = document.createElement('span');
+  s.className = 'spark';
+  host.appendChild(s);
+  s.addEventListener('animationend', () => s.remove(), { once: true });
+  // Safety net in case animationend never fires.
+  setTimeout(() => s.remove(), 600);
+}
+
 export function initPalette() {
   const parts = document.getElementById('parts');
   parts.innerHTML = '';
@@ -78,9 +90,18 @@ export function initPalette() {
     el.className = 'part';
     el.draggable = true;
     el.dataset.type = type;
+    el.dataset.kind = type;
     el.innerHTML = `${paletteIcon(type)}<div class="name">${COMP_LABELS[type]}</div>`;
-    el.addEventListener('dragstart', (ev) => { hideTip(); ev.dataTransfer.setData('text/plain', type); });
-    el.addEventListener('click', () => addComponent(type, SVG_W/2, SVG_H/2));
+    el.addEventListener('mousedown', () => fireSpark(el));
+    el.addEventListener('dragstart', (ev) => {
+      hideTip();
+      fireSpark(el);
+      ev.dataTransfer.setData('text/plain', type);
+    });
+    el.addEventListener('click', () => {
+      fireSpark(el);
+      addComponent(type, SVG_W/2, SVG_H/2);
+    });
     el.addEventListener('mouseenter', () => showTipFor(el, type));
     el.addEventListener('mouseleave', hideTip);
     el.addEventListener('focus', () => showTipFor(el, type));

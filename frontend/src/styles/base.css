@@ -16,6 +16,16 @@
   --info: #6fb3ff;
   --violet: #b28cff;
   --grid: #1a2440;
+  /* Electric blue — used for the "moving electricity" channel: wire flow
+     overlay, cell terminal pulses, current bars + I labels, and the
+     ammeter LCD readout. Disjoint from --accent (UI affordance green) so
+     hover/valid hints stay distinct from active current visuals. Tuned
+     darker and more neon-saturated than a sky blue so it pops off the
+     dark canvas at a glance. */
+  --electric:       #18b6ff;
+  --electric-hot:   #5cdcff;
+  --electric-deep:  #086fbe;
+  --electric-glow:  rgba(24, 182, 255, 0.95);
 
   /* Spacing & radius tokens — defined in rem so they scale with the
      fluid html font-size below. Use these everywhere instead of bare
@@ -32,6 +42,20 @@
   --radius-lg: 0.75rem;
   --radius-xl: 1.125rem;
   --radius-pill: 999px;
+}
+/* DSEG7 Modern — open-source 7-segment LCD font (SIL OFL) with
+   rectangular segment caps (boxier than the Classic angled variant).
+   Used by the ammeter / voltmeter readouts. Served from the dseg npm
+   package on jsdelivr (the GitHub repo only ships .sfd sources, not
+   built woff2). Falls back to a monospace stack if the CDN is
+   unreachable so the meter still reads as a digital display either way. */
+@font-face {
+  font-family: 'DSEG7Modern';
+  src: url('https://cdn.jsdelivr.net/npm/dseg@0.46/fonts/DSEG7-Modern/DSEG7Modern-Bold.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/npm/dseg@0.46/fonts/DSEG7-Modern/DSEG7Modern-Bold.woff')  format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 * { box-sizing: border-box; }
 /* Fluid root font-size: ~16px at 1280-wide viewports, ~20px at 4K, with
@@ -68,26 +92,97 @@ button { font-family: inherit; color: inherit; }
   filter: drop-shadow(0 0 6px rgba(45,226,179,0.7));
 }
 @keyframes pulse { 0%,100% { r: 5; } 50% { r: 7; } }
-.wire { fill: none; stroke: #7a8bb0; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+/* ---- Wires --------------------------------------------------------------
+ * Each wire is rendered as two layered SVG paths inside a wire-group:
+ *
+ *   .wire-base — the conductor itself. Always solid, never dashed. Reads
+ *                as a continuous metal trace even when the flow overlay's
+ *                dashes happen to land across a rounded corner.
+ *   .wire-flow — bright "moving charge" overlay. Dashed, animated by
+ *                stroke-dashoffset. Speed scales with the current
+ *                magnitude via the per-wire `--flow-dur` custom property
+ *                (set inline by the renderer; clamped 0.55s..2.4s).
+ *
+ * Selection state lives on the base path so the highlight survives even
+ * with no current. Active / reverse classes live on the flow overlay.
+ */
+.wire-base {
+  fill: none;
+  stroke: #7a8bb0;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* "Viscous liquid" shimmer — a slow stroke-opacity breath plus a faint
+     glow that swells on the same clock. 6s cycle: slow enough to not
+     distract from work, wide enough that a student notices the bench is
+     "alive". Filters use the wire's own colour so the shimmer reads as
+     light pooling along the conductor, not as a separate halo. */
+  animation: wire-shimmer 6s ease-in-out infinite;
+}
+.wire-base.selected { stroke: var(--info); stroke-width: 3; }
+.wire-flow {
+  fill: none;
+  stroke: var(--electric);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 5 14;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 5px var(--electric-glow));
+  transition: opacity 220ms ease;
+}
+/* Animation split out of the shorthand so the per-wire CSS variable
+   `--flow-dur` is robust against engines that don't compute custom
+   properties inside `animation:`. animation-name applies always so the
+   moving dashes work even if a browser fails to read the variable. */
+.wire-flow.active {
+  opacity: 1;
+  animation-name: flow;
+  animation-duration: var(--flow-dur, 1.1s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.wire-flow.reverse { animation-direction: reverse; }
+.wire-flow.preview {
+  stroke: var(--electric);
+  stroke-dasharray: 4 4;
+  opacity: 0.8;
+  animation: none;
+}
+.wire-group:hover .wire-base { stroke: var(--info); cursor: pointer; }
+
 /* DEBUG-OVERLAP — temporary diagnostic; remove with the corresponding
    renderer.js + app.js DEBUG-OVERLAP blocks once wire-overlap fix lands. */
 .wire-debug-overlap { stroke: #ff2a3d; stroke-width: 6; opacity: 0.9; stroke-linecap: butt; pointer-events: none; }
-.wire.selected { stroke: var(--info); stroke-width: 3; }
-.wire.active {
-  stroke: var(--accent);
-  stroke-dasharray: 6 10;
-  animation: flow 1s linear infinite;
-  filter: drop-shadow(0 0 4px rgba(45,226,179,0.5));
+
+/* Legacy .wire selectors kept for the preview overlay used by editor.js
+   while a wire is being drawn (path.preview class inside the preview
+   group). The preview is a single path, not the layered group. */
+.wire { fill: none; stroke: #7a8bb0; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.wire.preview {
+  stroke: var(--accent); stroke-dasharray: 4 4; opacity: 0.8;
 }
-.wire.reverse { animation-direction: reverse; }
-@keyframes flow { to { stroke-dashoffset: -16; } }
-.wire.preview { stroke: var(--accent); stroke-dasharray: 4 4; opacity: 0.8; }
-.wire:hover { stroke: var(--info); cursor: pointer; }
+
+@keyframes flow { to { stroke-dashoffset: -19; } }
+@keyframes wire-shimmer {
+  0%, 100% {
+    stroke-opacity: 0.65;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 2.5px rgba(122, 139, 176, 0.55));
+  }
+}
 .comp text { font-family: 'JetBrains Mono', monospace; fill: var(--muted); font-size: 12px; }
 .comp .label { fill: var(--text); font-weight: 600; font-size: 11px; }
 .comp .val { fill: var(--accent-2); font-size: 10px; }
 .comp .val.v { fill: var(--q-v); }
-.comp .val.i { fill: var(--q-i); }
+.comp .val.i {
+  fill: var(--electric);
+  filter: drop-shadow(0 0 2.5px var(--electric-glow));
+}
 .comp .val.r { fill: var(--q-r); }
 .comp.selected .frame { stroke: var(--info); stroke-width: 2; fill: rgba(111,179,255,0.08); }
 .comp.locked .frame { stroke: var(--violet); stroke-width: 1.5; fill: rgba(178,140,255,0.06); }
@@ -95,16 +190,43 @@ button { font-family: inherit; color: inherit; }
 .comp .body { stroke: #b9c4dc; stroke-width: 2; fill: none; }
 .comp .fill { fill: var(--bg-2); stroke: #b9c4dc; stroke-width: 2; }
 .vbar-bg { fill: #1a2440; stroke: #2a3558; stroke-width: 0.5; }
-.vbar-fg { fill: var(--q-v); filter: drop-shadow(0 0 2px rgba(255,207,92,0.7)); }
-.ibar-fg { fill: var(--q-i); filter: drop-shadow(0 0 2px rgba(45,226,179,0.7)); }
+.vbar-fg {
+  fill: var(--q-v);
+  filter: drop-shadow(0 0 3px rgba(255,207,92,0.85));
+  animation: vbar-shimmer 5.5s ease-in-out infinite;
+}
+.ibar-fg {
+  fill: var(--electric);
+  filter: drop-shadow(0 0 3px var(--electric-glow));
+  animation: ibar-shimmer 4.5s ease-in-out infinite;
+}
+/* Each bar pulses on its own clock so a row of meters doesn't beat in
+   lockstep — the staggered phases give the bench a "viscous liquid" feel
+   instead of a metronome. Amplitudes are wide enough to clearly read as
+   motion at a glance, with peaks pushed to ~12px of bloom so the bars
+   read as glowing neon strips against the dark canvas. */
+@keyframes vbar-shimmer {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255,207,92,0.55))  brightness(0.9);  }
+  50%      { filter: drop-shadow(0 0 12px rgba(255,207,92,1))     brightness(1.28); }
+}
+@keyframes ibar-shimmer {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(24,182,255,0.55))   brightness(0.9);  }
+  50%      { filter: drop-shadow(0 0 12px rgba(24,182,255,1))      brightness(1.28); }
+}
 /* Opaque background for wire-overlay current bars — must fully hide the
    wire stroke beneath. Slightly heavier border than vbar-bg for the same
    reason. */
 .ibar-bg { fill: #1a2440; stroke: #3a466e; stroke-width: 1; }
 .bar-label,
 .comp .bar-label { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
-.bar-label.v { fill: var(--q-v); }
-.bar-label.i { fill: var(--q-i); }
+.bar-label.v {
+  fill: var(--q-v);
+  filter: drop-shadow(0 0 2.5px rgba(255, 207, 92, 0.9));
+}
+.bar-label.i {
+  fill: var(--electric);
+  filter: drop-shadow(0 0 2.5px var(--electric-glow));
+}
 .bar-label.r { fill: var(--q-r); }
 
 /* Wire-to-wire junctions and corner-connector dots */
@@ -130,17 +252,47 @@ button { font-family: inherit; color: inherit; }
 .wire-corner-hit { cursor: crosshair; }
 .wire-hover-hit { cursor: crosshair; }
 
-/* Digital display for meters */
-.meter-lcd-bg {
-  fill: #081018; stroke: #2de2b3; stroke-width: 1;
-  filter: drop-shadow(0 0 3px rgba(45,226,179,0.4));
+/* Digital display for meters. The ammeter ("A") reads in electric blue —
+   it's measuring moving charge, so it shares the wire-flow channel. The
+   voltmeter ("V") stays warm yellow — voltage is potential, not flow.
+   Font stack: DSEG7Modern (boxy 7-segment, rectangular segment caps) →
+   Share Tech Mono → JetBrains Mono fallback so the meter still reads as
+   a digital display if the CDN is unreachable. Both colour channels get
+   a fat triple-stage drop-shadow so the digits glow off the bezel. */
+/* Note: nested under .comp for selector specificity — .comp text rules
+   above (0,1,1) would otherwise outrank a bare .meter-lcd-text (0,1,0)
+   and quietly reset font-family/fill back to JetBrains Mono / --muted. */
+.comp .meter-lcd-bg {
+  fill: #02040a;
+  stroke: var(--electric);
+  stroke-width: 1.1;
+  filter: drop-shadow(0 0 4px var(--electric-glow));
 }
-.meter-lcd-text {
-  fill: #2de2b3; font-family: 'JetBrains Mono', monospace;
-  font-weight: 700; font-size: 12px; letter-spacing: 0.5px;
+.comp .meter-lcd-bg.v {
+  stroke: var(--q-v);
+  filter: drop-shadow(0 0 4px rgba(255, 207, 92, 0.6));
 }
-.meter-lcd-text.v { fill: #ffcf5c; }
-.meter-lcd-bg.v { stroke: #ffcf5c; filter: drop-shadow(0 0 3px rgba(255,207,92,0.4)); }
+.comp .meter-lcd-text {
+  fill: var(--electric-hot);
+  font-family: 'DSEG7Modern', 'Share Tech Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  paint-order: stroke;
+  stroke: rgba(0, 6, 14, 0.6);
+  stroke-width: 0.35;
+  filter:
+    drop-shadow(0 0 1.2px rgba(200, 240, 255, 1))
+    drop-shadow(0 0 4px   var(--electric-glow))
+    drop-shadow(0 0 9px   rgba(24, 182, 255, 0.55));
+}
+.comp .meter-lcd-text.v {
+  fill: #fff0a8;
+  filter:
+    drop-shadow(0 0 1.2px rgba(255, 244, 200, 1))
+    drop-shadow(0 0 4px   rgba(255, 207, 92, 0.95))
+    drop-shadow(0 0 9px   rgba(255, 207, 92, 0.55));
+}
 
 /* Tutor-driven visual instructions. Kept subtle — a soft ring of colour and a
    gentle pulse at most, nothing flashy. Auto-clears after ~6s. */
@@ -164,6 +316,188 @@ button { font-family: inherit; color: inherit; }
 .comp.tutor-mark_error .fill { stroke: var(--danger); }
 .comp.tutor-mark_error { filter: drop-shadow(0 0 5px rgba(255,107,138,0.45)); }
 .comp.tutor-dim { opacity: 0.35; }
+
+/* ---- Physics-driven component shimmer ----------------------------------
+ * Each component group carries three CSS variables set by renderComponent:
+ *   --heat   resistor warmth (0..1, P / refP)
+ *   --lume   bulb luminosity (0..1, biased so dim circuits still glow)
+ *   --supply 1 if the cell/battery is sourcing current, else 0
+ * Effects below read these to drive subtle, slow modulation that conveys
+ * physics without distracting the student. Every animation is gated on
+ * non-zero state via opacity/calc() so idle components stay still.
+ */
+
+/* Resistor heat halo. .r-heat is a slightly inflated rounded rect drawn
+   above the resistor body. The fill is a warm tint and the drop-shadow
+   blooms outward as --heat grows. Animated opacity (4.2s) gives the
+   resistor a slow "heating" pulse. The two stacked drop-shadow filters
+   add a strong red core + softer orange halo for visibility. */
+.comp .r-heat {
+  fill: rgba(255, 110, 60, 0.85);
+  stroke: rgba(255, 188, 130, 0.9);
+  stroke-width: 0.8;
+  opacity: calc(var(--heat, 0) * 0.95);
+  filter:
+    drop-shadow(0 0 calc(var(--heat, 0) * 6px)  rgba(255, 110, 60, calc(var(--heat, 0) * 0.95)))
+    drop-shadow(0 0 calc(var(--heat, 0) * 14px) rgba(255, 80, 30,  calc(var(--heat, 0) * 0.55)));
+  pointer-events: none;
+  animation: r-heat-shimmer 4.2s ease-in-out infinite;
+  mix-blend-mode: screen;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes r-heat-shimmer {
+  0%, 100% { transform: scale(1);     opacity: calc(var(--heat, 0) * 0.85); }
+  50%      { transform: scale(1.07);  opacity: calc(var(--heat, 0) * 1.05); }
+}
+/* Resistor body picks up a stronger warm wash so the rectangle clearly
+   reads as heating up rather than just having a cloud sitting over it. */
+.comp[style*="--heat"] .fill {
+  filter: drop-shadow(0 0 calc(var(--heat, 0) * 5px) rgba(255, 110, 60, calc(var(--heat, 0) * 0.85)));
+  transition: filter 220ms ease;
+}
+/* Resistance value shines through the heat halo. At --heat=0 it reads as
+   the warm-red --q-r; as the resistor heats up the fill mixes toward
+   white, the digits grow ~30% larger, and a hot bloom builds — so the Ω
+   reading stays the brightest thing on the resistor regardless of how
+   saturated the halo gets. The dark stroke fades out as heat rises so
+   the white isn't choked by an outline at peak brightness. */
+.comp .val.r {
+  fill: color-mix(in oklab, var(--q-r), #ffffff calc(var(--heat, 0) * 100%));
+  font-weight: 700;
+  font-size: calc(10px + var(--heat, 0) * 3px);
+  letter-spacing: calc(var(--heat, 0) * 0.4px);
+  paint-order: stroke;
+  stroke: rgba(20, 8, 4, calc(0.55 - var(--heat, 0) * 0.45));
+  stroke-width: 0.7;
+  filter:
+    drop-shadow(0 0 calc(var(--heat, 0) * 3px)  rgba(255, 250, 230, calc(var(--heat, 0) * 1)))
+    drop-shadow(0 0 calc(var(--heat, 0) * 8px)  rgba(255, 220, 160, calc(var(--heat, 0) * 0.75)))
+    drop-shadow(0 0 calc(var(--heat, 0) * 16px) rgba(255, 170, 90,  calc(var(--heat, 0) * 0.45)));
+  transition: fill 220ms ease, filter 220ms ease, stroke 220ms ease,
+              font-size 220ms ease, letter-spacing 220ms ease;
+}
+
+/* Bulb halo flicker — a very slow scale + opacity wobble layered on top
+   of renderer-driven brightness. The renderer still owns the base radius
+   and fill alpha (so a brighter bulb is visibly bigger and warmer); CSS
+   adds the soft "incandescent breathing". */
+.comp .bulb-halo {
+  pointer-events: none;
+  transform-origin: 0 0;
+  transform-box: fill-box;
+  /* The fallback origin keeps the wobble centred on the bulb glass. */
+}
+.comp .bulb-halo-outer { animation: bulb-flicker-outer 3.4s ease-in-out infinite; }
+.comp .bulb-halo-inner { animation: bulb-flicker-inner 2.1s ease-in-out infinite; }
+@keyframes bulb-flicker-outer {
+  0%, 100% { opacity: 0.7;  transform: scale(0.94); }
+  40%      { opacity: 1.05; transform: scale(1.14); }
+  62%      { opacity: 0.78; transform: scale(1.0);  }
+  80%      { opacity: 0.92; transform: scale(1.06); }
+}
+@keyframes bulb-flicker-inner {
+  0%, 100% { opacity: 0.78; }
+  28%      { opacity: 1.05; }
+  55%      { opacity: 0.7;  }
+  78%      { opacity: 1; }
+}
+
+/* Battery terminal pulse. The two .term-pulse circles sit at the +/-
+   leads. They're invisible unless --supply = 1 (battery actively
+   sourcing); when they are, they breathe with a 2.4s loop and the +
+   side gets the warm voltage hue, the − side gets the cool current hue. */
+.comp .term-pulse {
+  fill: var(--electric);
+  stroke: none;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px var(--electric-glow));
+}
+.comp[style*="--supply:1"] .term-pulse {
+  opacity: 1;
+  animation: term-pulse-anim 1.8s ease-in-out infinite;
+}
+.comp .term-pulse.pos {
+  fill: var(--electric-hot);
+  filter: drop-shadow(0 0 7px rgba(155, 230, 255, 0.95));
+}
+.comp .term-pulse.neg {
+  fill: var(--electric-deep);
+  filter: drop-shadow(0 0 7px rgba(19, 137, 214, 0.95));
+  animation-delay: -0.9s;
+}
+@keyframes term-pulse-anim {
+  0%, 100% { r: 2.4; opacity: 0.45; }
+  50%      { r: 5.4; opacity: 1;    }
+}
+
+/* Switch snap + spark. The arm is wrapped in <g.switch-arm> with a pivot
+   at the left contact (-12, 0); the closed/open positions are baked into
+   the line geometry, but a tiny rotational overshoot CSS keyframe gives
+   the snap action. .switch-spark is a one-shot group emitted by the
+   renderer only on the render that detects a flip. */
+.comp .switch-arm {
+  transform-origin: -12px 0;
+  transform-box: view-box;
+}
+.comp.switch-snap-closed .switch-arm {
+  animation: switch-snap-down 280ms cubic-bezier(0.2, 1.6, 0.4, 1) 1;
+}
+.comp.switch-snap-open .switch-arm {
+  animation: switch-snap-up 280ms cubic-bezier(0.2, 1.6, 0.4, 1) 1;
+}
+@keyframes switch-snap-down {
+  0%   { transform: rotate(-30deg); }
+  60%  { transform: rotate(8deg);   }
+  100% { transform: rotate(0deg);   }
+}
+@keyframes switch-snap-up {
+  0%   { transform: rotate(30deg);  }
+  60%  { transform: rotate(-6deg);  }
+  100% { transform: rotate(0deg);   }
+}
+
+.comp .switch-spark {
+  pointer-events: none;
+  transform-origin: 0 0;
+  animation: switch-spark-fade 380ms ease-out forwards;
+}
+.comp .switch-spark .spark-core {
+  fill: #fff7d8;
+  stroke: rgba(255, 207, 92, 0.9);
+  stroke-width: 0.4;
+  filter: drop-shadow(0 0 5px rgba(255, 207, 92, 0.95));
+}
+.comp .switch-spark .spark-ray {
+  stroke: rgba(255, 220, 140, 0.95);
+  stroke-width: 1;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(255, 207, 92, 0.85));
+}
+@keyframes switch-spark-fade {
+  0%   { opacity: 1; transform: scale(0.4); }
+  60%  { opacity: 0.9; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+/* Reduced motion — every shimmer / flicker / pulse / snap is suspended.
+   Static state is preserved, so the heat halo + bulb glow + active flow
+   dasharray remain visible (just not animated). */
+@media (prefers-reduced-motion: reduce) {
+  .wire-base,
+  .wire-flow.active,
+  .vbar-fg, .ibar-fg,
+  .comp .r-heat,
+  .comp .bulb-halo-outer, .comp .bulb-halo-inner,
+  .comp[style*="--supply:1"] .term-pulse,
+  .comp.switch-snap-closed .switch-arm,
+  .comp.switch-snap-open .switch-arm,
+  .comp .switch-spark {
+    animation: none !important;
+  }
+  .comp .switch-spark { display: none; }
+}
 
 /* Scrollbars */
 ::-webkit-scrollbar { width: 0.5rem; height: 0.5rem; }
