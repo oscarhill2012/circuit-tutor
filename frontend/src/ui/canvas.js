@@ -1,58 +1,11 @@
-// Readout panel, tool/toggle buttons, keyboard shortcuts.
+// Tool/toggle buttons + keyboard shortcuts.
+// (Live-readings widget removed — selected-component values live in
+// Professor Volt's check-my-circuit response and the in-canvas meters.)
 
 import { state } from '../state/store.js';
 import { Sel, isValidTool } from '../state/constants.js';
 import { pushHistory, simulate, undo, redo, deleteComponent, deleteWire, clearCircuit, setTool } from '../state/actions.js';
 import { render, svg } from '../circuit/renderer.js';
-
-export function updateReadout() {
-  const s = state.sim;
-  let status = 'idle';
-  if (!s || s.empty) status = 'empty';
-  else if (!s.ok) status = 'error';
-  else if (s.noSource) status = 'no supply';
-  else if (s.isShort) status = 'short';
-  else if (s.isOpen) status = 'open';
-  else status = 'live';
-  document.getElementById('ro-status').textContent = status;
-
-  const hd = document.getElementById('ro-sel-hd');
-  const vEl = document.getElementById('ro-sel-v');
-  const iEl = document.getElementById('ro-sel-i');
-  const rEl = document.getElementById('ro-sel-r');
-  vEl.textContent = iEl.textContent = rEl.textContent = '—';
-
-  const sel = state.selection;
-  if (!sel) { hd.textContent = 'Select a component'; return; }
-  if (Sel.isWire(sel)) { hd.textContent = sel.id + ' — wire segment'; return; }
-
-  const c = state.components.find(x => x.id === sel.id);
-  if (!c) { hd.textContent = 'Select a component'; return; }
-  hd.textContent = `${c.id} · ${c.type}`;
-
-  const el = s && s.ok ? s.elementByCompId.get(c.id) : null;
-  const live = s && s.ok && !s.empty && !s.isShort;
-  if (el && live) {
-    vEl.textContent = Math.abs(el.drop).toFixed(2) + ' V';
-    iEl.textContent = Math.abs(el.current).toFixed(3) + ' A';
-  }
-  if (c.type === 'cell' || c.type === 'battery') {
-    vEl.textContent = Number(c.props.voltage).toFixed(2) + ' V';
-  }
-  if (c.type === 'resistor' || c.type === 'bulb') {
-    rEl.textContent = Number(c.props.resistance).toFixed(2) + ' Ω';
-  } else if (c.type === 'ammeter' || c.type === 'voltmeter') {
-    const ideal = c.type === 'ammeter' ? window.Physics.settings.ammeterR : window.Physics.settings.voltmeterR;
-    rEl.textContent = formatResistance(ideal);
-  }
-}
-
-function formatResistance(r) {
-  if (!isFinite(r) || r >= 1e7) return '∞ Ω';
-  if (r <= 1e-3) return '≈0 Ω';
-  if (r >= 1000) return (r / 1000).toFixed(2) + ' kΩ';
-  return r.toFixed(2) + ' Ω';
-}
 
 export function initTools() {
   document.querySelectorAll('.tools button[data-tool]').forEach(btn => {

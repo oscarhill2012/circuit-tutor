@@ -7,10 +7,11 @@ import { simulate, loadInitialCircuit } from './state/actions.js';
 import { render, initRenderer } from './circuit/renderer.js';
 import { initCanvasInteractions } from './circuit/editor.js';
 import { initPalette } from './ui/palette.js';
-import { initTools, initKeyboard, updateReadout } from './ui/canvas.js';
+import { initTools, initKeyboard } from './ui/canvas.js';
 import { initTaskControls, loadTasks, openTaskModal } from './tasks/engine.js';
 import { initTutorPanel } from './ui/tutorPanel.js';
 import { initDevInspector } from './tutor/devInspector.js';
+import { maybeRunIntro } from './ui/onboarding.js';
 
 export { state };
 
@@ -43,9 +44,16 @@ export async function boot() {
   console.assert(state.selection === null, 'selection starts null');
   simulate();
   render();
-  updateReadout();
 
-  // Open the task loader on first boot. The student picks a task or
-  // enters sandbox mode; Professor Volt introduces whichever they chose.
-  openTaskModal();
+  // First-launch operational tour. Resolves immediately if disabled
+  // (?intro=0 or localStorage.circuitTutor.introSeen === '1'). Otherwise
+  // walks the student through the UI and finishes with the task picker
+  // already open. See ui/onboarding.js + plans/16-onboarding-intro.md.
+  await maybeRunIntro();
+
+  // Open the task loader if the intro didn't already do so. The student
+  // picks a task or enters sandbox mode; Professor Volt introduces
+  // whichever they chose.
+  const modal = document.getElementById('task-modal');
+  if (!modal || modal.classList.contains('hidden')) openTaskModal();
 }

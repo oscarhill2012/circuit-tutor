@@ -17,6 +17,7 @@ import { route as routePath, segCross } from './wiring/router.js';
 import { previewPath } from './wiring/path.js';
 import { createValidator } from './wiring/validation.js';
 import { createWireInteractionController } from './wiring/controller.js';
+import { COMP_LABELS, COMP_DESCRIPTIONS } from './schema.js';
 
 export const editor = {
   hoveredTerm: null,
@@ -273,4 +274,76 @@ export function initCanvasInteractions() {
       editor.hoveredTerm = null;
     }
   });
+
+  initComponentGlossary();
+}
+
+// ---- Component glossary tooltip -----------------------------------------
+// Hovering any placed component on the canvas surfaces the same name +
+// short description that the palette tooltip shows. Reuses the
+// .part-tooltip styling so the visual identity is identical. The tooltip
+// is suppressed during a drag or while a wire is pending so it can't
+// flash mid-interaction.
+
+let glossaryTip = null;
+let glossaryTimer = 0;
+
+function ensureGlossaryTip() {
+  if (glossaryTip) return glossaryTip;
+  glossaryTip = document.createElement('div');
+  glossaryTip.id = 'comp-tooltip';
+  glossaryTip.className = 'part-tooltip';
+  glossaryTip.setAttribute('role', 'tooltip');
+  glossaryTip.innerHTML = '<div class="part-tooltip-title"></div><div class="part-tooltip-body"></div>';
+  document.body.appendChild(glossaryTip);
+  return glossaryTip;
+}
+
+export function showComponentGlossary(compId, anchorRect) {
+  const c = state.components.find(x => x.id === compId);
+  if (!c) return;
+  const tip = ensureGlossaryTip();
+  clearTimeout(glossaryTimer);
+  glossaryTimer = setTimeout(() => {
+    tip.querySelector('.part-tooltip-title').textContent = `${c.id} · ${COMP_LABELS[c.type] || c.type}`;
+    tip.querySelector('.part-tooltip-body').textContent = COMP_DESCRIPTIONS[c.type] || '';
+    // Tooltip width is 13.75rem (~220px at the default root size). Place
+    // it to the right of the component, falling back to the left when
+    // there isn't room.
+    const tipW = 14 * parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
+    const rect = anchorRect || { left: 0, right: 0, top: 0, height: 0 };
+    const left = rect.right + 14 + tipW > window.innerWidth
+      ? rect.left - tipW - 14
+      : rect.right + 14;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${rect.top + rect.height / 2}px`;
+    tip.classList.add('show');
+  }, 220);
+}
+
+export function hideComponentGlossary() {
+  clearTimeout(glossaryTimer);
+  glossaryTip?.classList.remove('show');
+}
+
+function initComponentGlossary() {
+  // Event-delegated hover. Using mouseover/mouseout lets us reuse a
+  // single listener regardless of how many comps the renderer rebuilds.
+  svg.addEventListener('mouseover', (ev) => {
+    if (editor.dragging || state.pendingWire) return;
+    const compEl = ev.target.closest && ev.target.closest('g.comp');
+    if (!compEl) return;
+    const cid = compEl.getAttribute('data-cid');
+    if (!cid) return;
+    showComponentGlossary(cid, compEl.getBoundingClientRect());
+  });
+  svg.addEventListener('mouseout', (ev) => {
+    const next = ev.relatedTarget;
+    if (next && next.closest && next.closest('g.comp')) return;
+    hideComponentGlossary();
+  });
+  // Any pointerdown inside the canvas — drag, terminal click, selection
+  // — should dismiss the tooltip immediately so it doesn't sit over
+  // a fresh interaction.
+  svg.addEventListener('pointerdown', () => hideComponentGlossary(), true);
 }

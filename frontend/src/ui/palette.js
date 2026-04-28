@@ -19,38 +19,58 @@ export function paletteIcon(type) {
   return icons[type] || '';
 }
 
+// Module-level handles so the onboarding tour (and any other caller) can
+// programmatically pop the palette tooltip on a tile to demonstrate the
+// hover-glossary feature.
+let paletteTip = null;
+let paletteTipTimer = null;
+
+function ensurePaletteTip() {
+  if (paletteTip) return paletteTip;
+  paletteTip = document.getElementById('part-tooltip');
+  if (paletteTip) return paletteTip;
+  paletteTip = document.createElement('div');
+  paletteTip.id = 'part-tooltip';
+  paletteTip.className = 'part-tooltip';
+  paletteTip.setAttribute('role', 'tooltip');
+  paletteTip.innerHTML = '<div class="part-tooltip-title"></div><div class="part-tooltip-body"></div>';
+  document.body.appendChild(paletteTip);
+  return paletteTip;
+}
+
+function paintPaletteTipFor(type, anchorRect, immediate = false) {
+  const tip = ensurePaletteTip();
+  clearTimeout(paletteTipTimer);
+  const fire = () => {
+    tip.querySelector('.part-tooltip-title').textContent = COMP_LABELS[type] || type;
+    tip.querySelector('.part-tooltip-body').textContent = COMP_DESCRIPTIONS[type] || '';
+    tip.style.left = `${anchorRect.right + 10}px`;
+    tip.style.top = `${anchorRect.top + anchorRect.height / 2}px`;
+    tip.classList.add('show');
+  };
+  if (immediate) fire();
+  else paletteTipTimer = setTimeout(fire, 200);
+}
+
+export function showPaletteTooltipFor(type) {
+  const tile = document.querySelector(`.parts [data-type="${type}"]`);
+  if (!tile) return;
+  paintPaletteTipFor(type, tile.getBoundingClientRect(), true);
+}
+
+export function hidePaletteTooltip() {
+  clearTimeout(paletteTipTimer);
+  paletteTip?.classList.remove('show');
+}
+
 export function initPalette() {
   const parts = document.getElementById('parts');
   parts.innerHTML = '';
 
-  // One floating tooltip element attached to <body> so it escapes the palette
-  // grid column's stacking context and any sibling overflow:hidden parents
-  // (canvas-wrap, rightcol). Positioned with `position: fixed` from the
-  // hovered .part's bounding rect.
-  let tip = document.getElementById('part-tooltip');
-  if (!tip) {
-    tip = document.createElement('div');
-    tip.id = 'part-tooltip';
-    tip.className = 'part-tooltip';
-    tip.setAttribute('role', 'tooltip');
-    tip.innerHTML = '<div class="part-tooltip-title"></div><div class="part-tooltip-body"></div>';
-    document.body.appendChild(tip);
-  }
-  let showTimer = null;
-  function hideTip() { clearTimeout(showTimer); tip.classList.remove('show'); }
+  ensurePaletteTip();
+  function hideTip() { hidePaletteTooltip(); }
   function showTipFor(el, type) {
-    clearTimeout(showTimer);
-    showTimer = setTimeout(() => {
-      const r = el.getBoundingClientRect();
-      tip.querySelector('.part-tooltip-title').textContent = COMP_LABELS[type];
-      tip.querySelector('.part-tooltip-body').textContent = COMP_DESCRIPTIONS[type];
-      // Position to the right of the palette item, vertically centred.
-      const left = r.right + 10;
-      const top = r.top + r.height / 2;
-      tip.style.left = `${left}px`;
-      tip.style.top = `${top}px`;
-      tip.classList.add('show');
-    }, 200);
+    paintPaletteTipFor(type, el.getBoundingClientRect());
   }
 
   for (const type of ['cell','battery','switch','bulb','resistor','ammeter','voltmeter']) {

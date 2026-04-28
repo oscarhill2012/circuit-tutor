@@ -7,7 +7,6 @@ import { Tool, Sel, SelKind } from '../state/constants.js';
 import { COMP, COMP_SCALE } from './schema.js';
 import { editor, onCompMouseDown, onTerminalPointerDown } from './editor.js';
 import { deleteWire, deleteComponent, splitWireAtCorner } from '../state/actions.js';
-import { updateReadout } from '../ui/canvas.js';
 import { termPos, endpointPos } from './geometry.js';
 import { route as routePath, segOverlap } from './wiring/router.js';
 import { collectComponentBoxes, collectWireSegments } from './wiring/obstacles.js';
@@ -318,8 +317,6 @@ export function render() {
 
   // Current bars overlaid on each wire (component bars + KCL junction bars).
   renderWireBars(wireBars);
-
-  updateReadout();
 }
 
 // Build a fresh <g.wire-group> for a wire. Used by reconcile() when no
@@ -1023,13 +1020,9 @@ function dragRoute(w, ctx) {
 
 export function setSelection(sel) {
   const prev = state.selection;
-  if (prev === sel || (prev && sel && prev.kind === sel.kind && prev.id === sel.id)) {
-    updateReadout();
-    return;
-  }
+  if (prev === sel || (prev && sel && prev.kind === sel.kind && prev.id === sel.id)) return;
   state.selection = sel;
   applySelectionClasses();
-  updateReadout();
 }
 
 function applySelectionClasses() {
