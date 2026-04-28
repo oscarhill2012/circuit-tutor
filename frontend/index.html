@@ -24,6 +24,10 @@
       <h1>Circuit Tutor</h1>
       <span class="tag">LAB BENCH · GCSE</span>
     </div>
+    <!-- Active-task context. Populated by ui/topbarContext.js — surfaces the
+         current task (type · title · overall progress) or sandbox state.
+         Click opens the task picker. Empty until loadTasks() resolves. -->
+    <div class="topbar-context" id="topbar-context" data-state="empty"></div>
     <div class="right">
       <span class="badge ai" title="AI transparency">● Volt is on shift</span>
       <button class="iconbtn" id="btn-open-tasks">Tasks</button>

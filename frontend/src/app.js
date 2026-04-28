@@ -10,6 +10,7 @@ import { initPalette } from './ui/palette.js';
 import { initTools, initKeyboard } from './ui/canvas.js';
 import { initTaskControls, loadTasks, openTaskModal } from './tasks/engine.js';
 import { initTutorPanel } from './ui/tutorPanel.js';
+import { initTopbarContext } from './ui/topbarContext.js';
 import { initDevInspector } from './tutor/devInspector.js';
 import { maybeRunIntro } from './ui/onboarding.js';
 
@@ -34,6 +35,11 @@ export async function boot() {
   }
 
   try { await loadTasks(); } catch (err) { console.error('Task load failed:', err); }
+
+  // Topbar context chip mounts after loadTasks() so its first render sees
+  // a populated TASKS array (otherwise the progress total would be 0/0
+  // until the next active-task change forced a re-render).
+  initTopbarContext();
 
   // Sandbox starts empty so the new topological short-circuit rule (a load
   // component whose terminals collapse to one node is flagged as a short)

@@ -43,7 +43,7 @@
 }
 @keyframes rail-flow { to { background-position: -200% 0; } }
 
-.brand { display:flex; align-items:center; gap: var(--space-3); }
+.brand { display:flex; align-items:center; gap: var(--space-3); flex-shrink: 0; }
 .brand .dot {
   width: 0.625rem; height: 0.625rem; border-radius: 50%;
   background: var(--accent);
@@ -75,7 +75,133 @@
   20%  { box-shadow: 0 0 10px var(--accent), 0 0 20px rgba(45,226,179,0.4); transform: scale(1); }
   30%  { box-shadow: 0 0 14px var(--accent), 0 0 28px rgba(45,226,179,0.6); transform: scale(1.18); }
 }
-.topbar .right { display:flex; gap: var(--space-2); align-items:center; }
+.topbar .right { display:flex; gap: var(--space-2); align-items:center; flex-shrink: 0; }
+
+/* Topbar context chip — middle slot. Surfaces the active task or sandbox
+   state so the topbar carries real working context, not just brand. The
+   chip grows to fill the available space; its title truncates with an
+   ellipsis on cramped viewports. Brand and right-side controls keep
+   their natural width via flex-shrink: 0 above. */
+.topbar-context {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 var(--space-4);
+}
+.topbar-context:empty,
+.topbar-context[data-state="empty"] { padding: 0; }
+
+.topbar-chip {
+  display: inline-flex; align-items: center; gap: var(--space-3);
+  background: rgba(19, 26, 46, 0.78);
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius-pill);
+  padding: 0.3125rem var(--space-3) 0.3125rem 0.625rem;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  max-width: 100%;
+  min-width: 0;
+  transition: background 160ms, border-color 160ms, box-shadow 160ms, transform 120ms;
+}
+.topbar-chip:hover {
+  background: rgba(26, 36, 64, 0.92);
+  border-top-color: rgba(178, 140, 255, 0.4);
+  border-right-color: rgba(178, 140, 255, 0.4);
+  border-bottom-color: rgba(178, 140, 255, 0.4);
+  box-shadow: 0 0 0 1px rgba(178, 140, 255, 0.18);
+}
+.topbar-chip:active { transform: scale(0.98); }
+.topbar-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.topbar-chip .chip-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5rem; height: 1.5rem;
+  border-radius: var(--radius-sm);
+  background: rgba(178, 140, 255, 0.18);
+  color: var(--violet);
+  flex-shrink: 0;
+}
+.topbar-chip .chip-text {
+  display: flex; flex-direction: column;
+  min-width: 0;
+  text-align: left;
+  line-height: 1.15;
+}
+.topbar-chip .chip-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.topbar-chip .chip-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 28ch;
+}
+.topbar-chip .chip-progress {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  flex-shrink: 0;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--line);
+  margin-left: 0.125rem;
+}
+.topbar-chip .chip-progress-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.topbar-chip .chip-progress-sep { color: var(--line); margin: 0 1px; }
+.topbar-chip .chip-progress-bar {
+  width: 3rem; height: 0.25rem;
+  background: rgba(36, 49, 84, 0.7);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.topbar-chip .chip-progress-fill {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--violet), var(--accent));
+  border-radius: var(--radius-pill);
+  transition: width 280ms ease;
+}
+
+/* Type-coloured accents — left edge + icon tint mirror the role colours
+   used in the task picker (mint=measure, info=problem, yellow=scenario,
+   violet=exploration). Sandbox sits on violet to match the tutor persona. */
+.topbar-context[data-state="active"][data-type="measure"]     .topbar-chip { border-left-color: var(--accent); }
+.topbar-context[data-state="active"][data-type="measure"]     .chip-icon { background: rgba(45, 226, 179, 0.18); color: var(--accent); }
+.topbar-context[data-state="active"][data-type="problem"]     .topbar-chip { border-left-color: var(--info); }
+.topbar-context[data-state="active"][data-type="problem"]     .chip-icon { background: rgba(111, 179, 255, 0.18); color: var(--info); }
+.topbar-context[data-state="active"][data-type="scenario"]    .topbar-chip { border-left-color: var(--accent-2); }
+.topbar-context[data-state="active"][data-type="scenario"]    .chip-icon { background: rgba(255, 207, 92, 0.18); color: var(--accent-2); }
+.topbar-context[data-state="active"][data-type="exploration"] .topbar-chip { border-left-color: var(--violet); }
+.topbar-context[data-state="active"][data-type="exploration"] .chip-icon { background: rgba(178, 140, 255, 0.18); color: var(--violet); }
+
+.topbar-context[data-state="sandbox"] .topbar-chip {
+  border-left-color: var(--violet);
+  background: rgba(19, 26, 46, 0.55);
+}
+.topbar-context[data-state="sandbox"] .chip-icon {
+  background: rgba(178, 140, 255, 0.16);
+  color: var(--violet);
+}
+
+@media (max-width: 1100px) {
+  .topbar-chip .chip-title { max-width: 18ch; }
+}
+@media (max-width: 900px) {
+  .topbar-chip .chip-eyebrow,
+  .topbar-chip .chip-progress-bar { display: none; }
+  .topbar-chip .chip-progress { padding-left: var(--space-2); }
+}
 .topbar .badge {
   font-size: 0.75rem; color: var(--muted); padding: var(--space-1) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-pill);
   font-family: 'JetBrains Mono', monospace;
