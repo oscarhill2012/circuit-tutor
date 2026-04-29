@@ -144,7 +144,6 @@
   font-weight: 600;
   color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 28ch;
 }
 .topbar-chip .chip-progress {
   display: inline-flex; align-items: center; gap: 0.5rem;
