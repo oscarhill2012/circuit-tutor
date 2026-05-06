@@ -51,7 +51,6 @@ function trimChatIfTooLong() {
 
 export function clearChat() {
   state.messages = [];
-  state.rollingSummary = '';
   const host = document.getElementById('messages');
   if (host) host.innerHTML = '';
 }

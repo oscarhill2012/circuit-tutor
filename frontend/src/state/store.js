@@ -23,6 +23,5 @@ export const state = {
   messages: [],
   lockedIds: new Set(),     // component ids that the current task has pinned
   loadedTaskId: null,       // last task whose initial circuit was loaded
-  rollingSummary: '',       // tutor-authored summary of earlier turns
   visuals: {},              // tutor-driven overlays: id → { action, label, expiresAt }
 };

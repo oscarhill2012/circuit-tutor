@@ -4,12 +4,12 @@
 // `localStorage.devMode = '1'` in the browser console. When enabled, captures
 // the JSON body sent to /api/tutor and the JSON returned, and renders them in
 // a floating collapsible panel so we can verify what the model actually sees
-// (pinned KB entries, retrieved snippets, recent_history, circuit_state, ...).
+// (the slim payload + the tool-call ledger from agent_runner).
 //
 // In dev mode the client also sets `debug: true` on the outbound payload —
-// the server echoes back the post-budget user_payload it forwarded to OpenAI
-// plus the static system_prompt. The prod UI never sets that flag, so this
-// has zero effect on normal traffic.
+// the server echoes back the tool ledger so we can replay any reply through
+// the post-validator without re-invoking the model. The prod UI never sets
+// that flag, so this has zero effect on normal traffic.
 
 import { escapeHtml } from '../tasks/engine.js';
 
@@ -60,6 +60,14 @@ export function captureResponse(data) {
 export function captureError(err) {
   if (!isDevMode()) return;
   if (captures[0]) captures[0].error = String(err && err.message || err);
+  render();
+}
+
+// Capture the tool ledger so it renders alongside the request/response in
+// the inspector. Set by the api.js client when `debug` is on.
+export function captureToolLedger(ledger) {
+  if (!isDevMode()) return;
+  if (captures[0]) captures[0].tool_ledger = Array.isArray(ledger) ? ledger : null;
   render();
 }
 
