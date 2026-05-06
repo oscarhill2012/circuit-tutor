@@ -20,31 +20,36 @@ Topics covered:
 
 STRUCTURE
 ---------
-  frontend/
-    index.html               - Main app (self-contained)
-    src/
-      data/
-        tasks.json            - Ordered task list (edit to add/remove tasks)
-      sim/physics.js          - Client-side physics simulation
-      tasks/engine.js         - Task card renderer
-      tutor/api.js            - Tutor HTTP client (posts to /api/tutor)
-      circuit/ state/ ui/     - Editor, renderer, state store, panels
-    api/
-      tutor.py                - Vercel serverless function (AI tutor endpoint).
-                                Loads knowledge_base.json and runs retrieval
-                                server-side; client never sends KB snippets.
-      circuit_validator.py    - Server-side circuit analysis (grounding)
-      knowledge_base.json     - Curated GCSE KB; single source of truth
-    vercel.json              - Vercel deployment config
-    requirements.txt         - Python dependencies for serverless functions
+The repo root IS the Vercel deploy root. Vercel's Python serverless
+convention auto-mounts any *.py file at api/ as an endpoint, so the
+backend lives at api/ (not backend/). Static frontend assets live at
+frontend/ and are referenced from index.html with relative paths.
+
+  index.html                 - Entry point (served at /)
+  vercel.json                - Vercel deployment config
+  requirements.txt           - Python deps for serverless functions
+  frontend/                  - Static client code
+    main.js, app.js          - Module entry + boot
+    data/tasks.json          - Ordered task list (edit to add/remove tasks)
+    sim/physics.js           - Client-side physics simulation
+    tasks/engine.js          - Task card renderer
+    tutor/api.js             - Tutor HTTP client (posts to /api/tutor)
+    circuit/ state/ ui/      - Editor, renderer, state store, panels
+    styles/ assets/          - CSS and images
+  api/                       - Python serverless functions (Vercel auto-mount)
+    tutor.py                 - /api/tutor endpoint. Loads knowledge_base.json
+                               and runs retrieval server-side; client never
+                               sends KB snippets.
+    circuit_validator.py     - Server-side circuit analysis (grounding)
+    knowledge_base.json      - Curated GCSE KB; single source of truth
 
 DEPLOYMENT
 ----------
-The frontend deploys to Vercel as a zero-install browser app. No local
+The repo deploys to Vercel as a zero-install browser app. No local
 environment is required to use it - students open the URL and start learning.
 
 To run locally for development:
-  npx serve frontend/
+  vercel dev
 
 AI SAFETY
 ---------

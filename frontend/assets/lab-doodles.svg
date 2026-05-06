@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" fill="none" stroke="#cbd5ff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Top-left: V = IR -->
+  <g transform="translate(70 110)" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="46" fill="#cbd5ff" stroke="none">
+    <text>V = IR</text>
+  </g>
+
+  <!-- Top-left: resistor squiggle -->
+  <g transform="translate(60 180)">
+    <path d="M0 20 L30 20 L40 5 L60 35 L80 5 L100 35 L120 5 L140 35 L150 20 L180 20"/>
+  </g>
+
+  <!-- Top-right: ohm symbol -->
+  <g transform="translate(1390 130)" font-family="Georgia, serif" font-size="84" fill="#cbd5ff" stroke="none">
+    <text>Ω</text>
+  </g>
+
+  <!-- Top-right: battery cell -->
+  <g transform="translate(1380 230)">
+    <line x1="0" y1="20" x2="40" y2="20"/>
+    <line x1="40" y1="0" x2="40" y2="40"/>
+    <line x1="55" y1="10" x2="55" y2="30"/>
+    <line x1="55" y1="20" x2="100" y2="20"/>
+    <line x1="100" y1="0" x2="100" y2="40"/>
+    <line x1="115" y1="10" x2="115" y2="30"/>
+    <line x1="115" y1="20" x2="160" y2="20"/>
+  </g>
+
+  <!-- Top-center: integral sign with limits -->
+  <g transform="translate(780 80)" font-family="Georgia, serif" font-size="72" fill="#cbd5ff" stroke="none">
+    <text font-style="italic">∫</text>
+  </g>
+
+  <!-- Bottom-left: oscilloscope sine trace -->
+  <g transform="translate(80 820)">
+    <path d="M0 40 Q30 0 60 40 T120 40 T180 40 T240 40 T300 40"/>
+    <line x1="0" y1="40" x2="320" y2="40" stroke-dasharray="3 5" stroke-width="0.8" opacity="0.6"/>
+  </g>
+
+  <!-- Bottom-left: P = VI -->
+  <g transform="translate(110 770)" font-family="Georgia, serif" font-style="italic" font-size="34" fill="#cbd5ff" stroke="none">
+    <text>P = VI</text>
+  </g>
+
+  <!-- Bottom-right: bulb glyph -->
+  <g transform="translate(1380 800)">
+    <line x1="0" y1="40" x2="35" y2="40"/>
+    <circle cx="60" cy="40" r="22"/>
+    <line x1="46" y1="26" x2="74" y2="54"/>
+    <line x1="46" y1="54" x2="74" y2="26"/>
+    <line x1="85" y1="40" x2="120" y2="40"/>
+  </g>
+
+  <!-- Bottom-right: switch -->
+  <g transform="translate(1370 900)">
+    <line x1="0" y1="20" x2="35" y2="20"/>
+    <circle cx="38" cy="20" r="3"/>
+    <line x1="40" y1="20" x2="80" y2="2"/>
+    <circle cx="82" cy="20" r="3"/>
+    <line x1="85" y1="20" x2="120" y2="20"/>
+  </g>
+
+  <!-- Center-left edge: small arrow + I label -->
+  <g transform="translate(40 500)" font-family="Georgia, serif" font-style="italic" font-size="32" fill="#cbd5ff" stroke="none">
+    <text>I →</text>
+  </g>
+
+  <!-- Center-right edge: V label with arrow -->
+  <g transform="translate(1430 500)" font-family="Georgia, serif" font-style="italic" font-size="32" fill="#cbd5ff" stroke="none">
+    <text>← V</text>
+  </g>
+
+  <!-- Top-center small notation -->
+  <g transform="translate(700 200)" font-family="Georgia, serif" font-size="22" fill="#cbd5ff" stroke="none" font-style="italic">
+    <text>Q = It</text>
+  </g>
+
+  <!-- Mid-left: little diode arrow -->
+  <g transform="translate(160 460)">
+    <line x1="0" y1="20" x2="30" y2="20"/>
+    <polygon points="30,8 30,32 50,20" fill="#cbd5ff" stroke="none"/>
+    <line x1="50" y1="8" x2="50" y2="32"/>
+    <line x1="50" y1="20" x2="80" y2="20"/>
+  </g>
+
+  <!-- Mid-right: capacitor + label -->
+  <g transform="translate(1350 470)">
+    <line x1="0" y1="20" x2="30" y2="20"/>
+    <line x1="30" y1="3" x2="30" y2="37"/>
+    <line x1="42" y1="3" x2="42" y2="37"/>
+    <line x1="42" y1="20" x2="72" y2="20"/>
+    <text x="20" y="60" font-family="Georgia, serif" font-style="italic" font-size="22" fill="#cbd5ff" stroke="none">C</text>
+  </g>
+</svg>

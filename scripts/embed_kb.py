@@ -1,10 +1,10 @@
 """One-shot offline KB embedding script.
 
-Reads frontend/api/knowledge_base.json, embeds each entry's `fact` text via
+Reads api/knowledge_base.json, embeds each entry's `fact` text via
 OpenAI's `text-embedding-3-small`, writes the vectors to
-frontend/api/knowledge_base.embeddings.json.
+api/knowledge_base.embeddings.json.
 
-The runtime tutor (`frontend/api/tools.py:lookup_knowledge`) loads this file
+The runtime tutor (`api/tools.py:lookup_knowledge`) loads this file
 on import and uses cosine top-k against it; if the file is missing or
 malformed it falls back to bag-of-words. So running this script is a
 one-time cost (~£0.0001 per 49 entries) that the runtime gracefully tolerates
@@ -33,8 +33,8 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-KB_PATH = REPO_ROOT / "frontend" / "api" / "knowledge_base.json"
-EMB_PATH = REPO_ROOT / "frontend" / "api" / "knowledge_base.embeddings.json"
+KB_PATH = REPO_ROOT / "api" / "knowledge_base.json"
+EMB_PATH = REPO_ROOT / "api" / "knowledge_base.embeddings.json"
 EMBED_MODEL = os.environ.get("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 
 
