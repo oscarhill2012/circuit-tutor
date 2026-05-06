@@ -1,17 +1,11 @@
 # Tutor agent — gold-standard pattern for Genesis tools
 
-> Status: shipped (post tutor-redo Chunk 6). Audience: future-Claude / future
-> contributors building fraction-quest, projectile-sim, or any other Genesis
-> tool that needs an AI tutor.
+> Audience: future contributors building fraction-quest, projectile-sim, or any
+> other Genesis tool that needs an AI tutor.
 >
 > This doc is the durable template. It is written from the actual code
-> (`api/`), not from the plan — quote real file paths and real
-> function signatures rather than aspirational ones. If the code drifts, fix
-> the code, then update this doc.
-
-The plan that built this surface is at `plans/tutor-redo/00-full-plan.md`;
-read it once before adopting the pattern. The chunk files (`01-…` through
-`06-…`) are the build sequence.
+> (`api/`) — quoting real file paths and real function signatures. If the code
+> drifts, fix the code, then update this doc.
 
 ---
 
@@ -172,7 +166,9 @@ Then append to `ALL_PROBES`.
 
 ## 5. What goes in the prompt vs the tools
 
-This is the discipline that prevents the heuristic-stack failure mode.
+This is the discipline that prevents the heuristic-stack failure mode —
+where Python heuristics accumulate around the model trying to "help" it
+behave correctly, eventually fighting both the model and each other.
 
 | In the prompt | In the tools |
 |---|---|
@@ -183,9 +179,9 @@ This is the discipline that prevents the heuristic-stack failure mode.
 | Citation requirements (model proposes; validator enforces) | The cite-vs-lookup ledger check (`cite_fact`) |
 
 If you're tempted to add a Python heuristic to "help" the model — don't.
-That was the legacy-tutor failure mode (full plan §1.2 H1-H8). Either
-the model needs more prompting (add an exemplar), the validator needs a
-new branch (it's a soundness gap), or the contract is wrong (rare).
+Either the model needs more prompting (add an exemplar), the validator
+needs a new branch (it's a soundness gap), or the contract is wrong
+(rare).
 
 ---
 
@@ -203,12 +199,12 @@ new branch (it's a soundness gap), or the contract is wrong (rare).
 ### Trivial turn budget
 
 A "ok thanks"-class turn should ship under ~4 kB total payload. The probe
-suite's `G2_trivial_turn_short_payload` watches this — tighten the cap in
-Chunk 5 / known-defects iteration if the prompt drifts.
+suite's `G2_trivial_turn_short_payload` watches this; tighten the cap if
+the prompt drifts.
 
 ---
 
-## 7. Risks revisited (full plan §11 with circuit-tutor lessons)
+## 7. Risks and mitigations
 
 - **R1 — Tool-loop latency.** Mitigated by parallel oracle calls. Real-mode
   probes confirm the prompt actually emits parallel calls.
@@ -218,8 +214,8 @@ Chunk 5 / known-defects iteration if the prompt drifts.
 - **R3 — Cost ceiling per turn.** Hard cap (`MAX_ITERS = 5`) + dedupe; the
   `redundant_calls` counter surfaces in dev panel.
 - **R4 — Model under-calls tools.** The post-validator's
-  `claim_classifier.py` is the arbiter. Start permissive (Chunk 2),
-  tighten with probes (Chunk 5).
+  `claim_classifier.py` is the arbiter. Start permissive, tighten with
+  probes.
 - **R5 — Schema drift.** Single source of truth: pydantic models →
   `model_json_schema()` → `tool_dispatch.build_tools_spec()` → OpenAI
   `tools=[...]`.
@@ -229,8 +225,8 @@ Chunk 5 / known-defects iteration if the prompt drifts.
   no shell/SQL interpolation anywhere in tool bodies.
 - **R8 — Out-of-distribution physics.** Caught by the citation requirement:
   no lookup → no cite → reject → corrective re-invoke → fall back.
-- **R9 — Backwards compat.** `appendTutorMsg(parsed)` shape is preserved by
-  `TutorReplyEnvelope` — Chunk 6 cutover does not change the consumer.
+- **R9 — Frontend envelope compat.** `appendTutorMsg(parsed)` shape is
+  preserved by `TutorReplyEnvelope` — consumers do not see the agent loop.
 
 ---
 
@@ -257,6 +253,6 @@ For each new tool that needs a tutor:
 7. Run the suite in stub mode first (must pass), then real mode while
    tuning the prompt.
 
-The investment in this rebuild pays back in every subsequent tool only if
-the pattern is documented before memory of "why we did it this way"
-fades. **This doc IS the payback.**
+The investment in this pattern pays back in every subsequent tool only if
+it is documented before memory of "why we did it this way" fades.
+**This doc IS the payback.**

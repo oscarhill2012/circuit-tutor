@@ -150,7 +150,11 @@ def validate_final_reply(
     env: TutorReplyEnvelope = coerced
 
     # ---- 1. tool invariant ------------------------------------------------
-    if not ledger.calls:
+    # `ack` turns (greetings, thanks, acknowledgements) are pure social
+    # pleasantries with no physics content and so are exempt from the
+    # tool-call requirement. Every other reply type must ground itself in
+    # at least one tool call.
+    if not ledger.calls and env.reply_type != "ack":
         return Reject("no_tools_called", "ledger is empty; at least one tool call is required")
 
     # ---- 2. refusal exclusivity -------------------------------------------
@@ -391,11 +395,11 @@ def run_agent(
 
     for iter_idx in range(MAX_ITERS):
         iterations_used = iter_idx + 1
-        tool_choice = "required" if iter_idx == 0 else "auto"
-        # On the second-or-later attempt at the final reply, allow the model
-        # to skip tools and just return JSON.
-        if already_re_invoked:
-            tool_choice = "auto"
+        # `tool_choice = "auto"` throughout: the post-validator enforces the
+        # tool-call requirement for non-ack replies, so we don't need the API
+        # to force a tool. Forcing one would push pure-pleasantry turns
+        # (greetings, thanks) into a spurious `refuse` call.
+        tool_choice = "auto"
 
         response: ModelResponse = llm_call(
             messages,
