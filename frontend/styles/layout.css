@@ -535,12 +535,8 @@
 .msg { max-width: 92%; padding: var(--space-3) var(--space-3); border-radius: var(--radius-lg); font-size: 0.8125rem; line-height: 1.45; }
 .msg.tutor-msg { background: var(--panel-2); border: 1px solid var(--line); align-self: flex-start; }
 .msg.tutor-msg .who { font-size: 0.625rem; color: var(--violet); margin-bottom: var(--space-1); font-family: 'JetBrains Mono', monospace; }
-.msg.tutor-msg.socratic_hint  { border-left: 3px solid var(--info); }
-.msg.tutor-msg.correction     { border-left: 3px solid var(--accent-2); }
-.msg.tutor-msg.check_work     { border-left: 3px solid var(--accent); }
-.msg.tutor-msg.quiz_prompt    { border-left: 3px solid var(--violet); }
 .msg.tutor-msg.refusal        { border-left: 3px solid var(--danger); opacity: 0.9; }
-.msg.tutor-msg.teaching           { border-left: 3px solid var(--muted); }
+.msg.tutor-msg.teaching       { border-left: 3px solid var(--muted); }
 .msg.user-msg { background: rgba(111,179,255,0.08); border: 1px solid rgba(111,179,255,0.2); align-self: flex-end; }
 .msg .follow-up {
   margin-top: var(--space-2); font-style: italic; color: var(--accent);
