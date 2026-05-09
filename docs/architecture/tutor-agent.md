@@ -17,7 +17,7 @@ what is in scope, and what the live state is; it gains authority over
 pedagogy, sequencing, and tone.
 
 ```
-client  →  POST /api/tutor?v=2   (slim payload)
+client  →  POST /api/tutor       (slim payload)
               │
               ▼
          agent_runner.run_agent()    ← the loop
@@ -41,9 +41,11 @@ client  →  POST /api/tutor?v=2   (slim payload)
               └─ persist session, return AgentResult to HTTP layer
 ```
 
-Every line of this flow is mechanically tested in
-`api/test_agent_runner.py` with a stub LLM. **Build the same shape
-for the next Genesis tool.**
+Every line of this flow is mechanically tested in `tests/api/` (unit
+tests for `validate_final_reply`, session history injection, ack
+envelope, error sanitisation) and exercised end-to-end by the stub-LLM
+probes in `tests/probes/agent/`. **Build the same shape for the next
+Genesis tool.**
 
 ---
 
@@ -189,7 +191,7 @@ needs a new branch (it's a soundness gap), or the contract is wrong
 
 | Lever | Where | Effect |
 |---|---|---|
-| Slim payload | `frontend/tutor/api_v2.js` | The wire carries `{student_message, selected, current_task, session_id}` plus the live `circuit_state`. No 8 kB KB snippets, no 4-turn history (kept server-side), no triage flags. |
+| Slim payload | `frontend/tutor/api.js` | The wire carries `{student_message, selected, current_task, session_id}` plus the live `circuit_state`. No 8 kB KB snippets, no 4-turn history (kept server-side), no triage flags. |
 | `tool_choice="required"` only on iter 0 | `agent_runner.run_agent` | Subsequent iters allow text-only replies, so a simple "ok thanks" can finish in one round-trip after the mandatory first tool call. |
 | Oracle dedupe | `tool_dispatch.py:_DEDUPE_TOOLS` | Repeated calls to `analyse_topology` / `inspect_circuit` / `read_meter` / `lookup_knowledge` with identical args return the cached result and increment `redundant_calls`. |
 | Iter cap | `agent_runner.MAX_ITERS = 5` | A misbehaving prompt cannot spiral forever — the loop force-falls to a safe envelope after 5 iters. |

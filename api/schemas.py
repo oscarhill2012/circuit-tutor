@@ -258,7 +258,7 @@ class CurrentTask(BaseModel):
 
 
 class TutorRequest(BaseModel):
-    """Inbound request body for /api/tutor?v=2."""
+    """Inbound request body for /api/tutor."""
 
     model_config = ConfigDict(extra="ignore")
     student_message: str = Field(..., min_length=1, max_length=2000)
