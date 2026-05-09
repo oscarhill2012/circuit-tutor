@@ -373,8 +373,29 @@ def run_agent(
     tools_spec = build_tools_spec()
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        build_first_user_message(inbound),
     ]
+
+    # Inject the rolling summary + last few turns so the model has continuity.
+    # `session.history` is appended to at the end of every prior `run_agent`
+    # call (see `store.append_history(...)` below), capped at _HISTORY_LIMIT
+    # turns by `session_store.append_history`.
+    if session.rolling_summary:
+        messages.append({
+            "role": "system",
+            "content": f"Rolling summary of prior turns: {session.rolling_summary}",
+        })
+    if session.next_step:
+        messages.append({
+            "role": "system",
+            "content": f"Next pedagogical step recorded last turn: {session.next_step}",
+        })
+    for turn in session.history:
+        if turn.role == "student":
+            messages.append({"role": "user", "content": turn.content})
+        elif turn.role in ("assistant", "tutor"):
+            messages.append({"role": "assistant", "content": turn.content})
+
+    messages.append(build_first_user_message(inbound))
 
     has_check = inbound.check_request is not None
     validator_inbound = ValidatorInbound(has_check_request=has_check)

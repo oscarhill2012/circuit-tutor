@@ -92,10 +92,7 @@ class SessionStore:
         if rolling_summary is not None:
             state.rolling_summary = rolling_summary
         if next_step is not None:
-            # `next_step` lives in the per-turn StateSummary the agent builds
-            # for the envelope, but stash it on the session too so the next
-            # turn's prompt can recall the immediate prior step.
-            state.current_goal = state.current_goal or ""
+            state.next_step = next_step
         if observed_misconceptions is not None:
             existing = set(state.observed_misconceptions)
             for mid in observed_misconceptions:

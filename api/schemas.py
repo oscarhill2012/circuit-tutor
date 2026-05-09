@@ -292,6 +292,7 @@ class SessionState(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str
     current_goal: str = ""
+    next_step: str = ""
     observed_misconceptions: list[str] = Field(default_factory=list)
     last_fix_target_id: str | None = None
     history: list[HistoryTurn] = Field(default_factory=list)
