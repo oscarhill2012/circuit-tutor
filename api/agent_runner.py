@@ -252,15 +252,6 @@ from tool_dispatch import ExecutionContext, build_tools_spec, dispatch
 
 MAX_ITERS = 5
 
-# Read-only oracle tools may be parallel-dispatched within a single model
-# turn. Action tools mutate state and must serialise.
-_PARALLELISABLE = frozenset({
-    "analyse_topology",
-    "inspect_circuit",
-    "read_meter",
-    "lookup_knowledge",
-})
-
 
 @dataclass
 class AgentResult:
@@ -411,12 +402,8 @@ def run_agent(
             # Append the model's tool_call turn so OpenAI's API stays happy.
             messages.append(make_assistant_tool_call_message(response.tool_calls))
             for tc in response.tool_calls:
-                if not tc.name in _PARALLELISABLE:
-                    rec = dispatch(tc, ctx)
-                    messages.append(make_tool_message(tc, rec.result))
-                else:
-                    rec = dispatch(tc, ctx)
-                    messages.append(make_tool_message(tc, rec.result))
+                rec = dispatch(tc, ctx)
+                messages.append(make_tool_message(tc, rec.result))
             continue
 
         # No tool_calls this turn — this should be the final reply.

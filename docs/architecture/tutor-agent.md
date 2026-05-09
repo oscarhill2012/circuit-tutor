@@ -206,8 +206,9 @@ the prompt drifts.
 
 ## 7. Risks and mitigations
 
-- **R1 — Tool-loop latency.** Mitigated by parallel oracle calls. Real-mode
-  probes confirm the prompt actually emits parallel calls.
+- **R1 — Tool-loop latency.** The model may emit multiple oracle tool calls
+  in a single response; the runner dispatches them sequentially. Real-mode
+  probes confirm the prompt emits multiple tool calls per turn.
 - **R2 — `tool_choice="required"` provider variance.** The validator's
   `no_tools_called` reject branch is the safety net; `agent_runner` has the
   corrective re-invoke ready.

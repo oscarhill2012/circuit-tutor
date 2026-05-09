@@ -509,7 +509,7 @@ F2 = Probe(
 
 G1 = Probe(
     id="G1_parallel_oracle_calls",
-    description="Multiple oracle tool calls dispatched in one model turn.",
+    description="Model emits multiple oracle tool calls in one response.",
     message="walk me through what this circuit is doing",
     setup=ProbeSetup(circuit=working_series_loop(), sim=working_loop_with_sim()),
     expect=ProbeExpectations(
