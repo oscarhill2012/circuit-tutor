@@ -105,7 +105,7 @@ function stripTrailingQuestion(text) {
 
 export function appendTutorMsg(payload) {
   const m = document.createElement('div');
-  m.className = 'msg tutor-msg ' + (payload.reply_type || 'direct_explanation');
+  m.className = 'msg tutor-msg ' + (payload.reply_type || 'teaching');
   const who = document.createElement('div');
   who.className = 'who'; who.textContent = 'Professor Volt';
   m.appendChild(who);
@@ -205,7 +205,7 @@ export function initTutorPanel() {
   };
   document.getElementById('btn-help').onclick = () => {
     appendTutorMsg({
-      reply_type: 'direct_explanation',
+      reply_type: 'teaching',
       assistant_text: 'Drag components from the left palette. Click two terminals to draw a wire. Press "s" while a switch is selected to toggle it. Use Delete or the Delete tool to remove items. Ask me anything about circuits.',
       follow_up_question: 'Ready to try the first challenge?'
     });

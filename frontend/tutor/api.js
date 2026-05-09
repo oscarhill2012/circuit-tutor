@@ -155,17 +155,17 @@ async function sendOneRequest(combinedMessage) {
     const data = await postOnce(buildSlimPayload(combinedMessage));
     removeThinking(thinkingId);
     if (!data) {
-      appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: "I couldn't reach the tutor service." });
+      appendTutorMsg({ reply_type: 'teaching', assistant_text: "I couldn't reach the tutor service." });
       return;
     }
-    const parsed = data.reply || { reply_type: 'direct_explanation', assistant_text: 'No reply.' };
+    const parsed = data.reply || { reply_type: 'teaching', assistant_text: 'No reply.' };
     appendTutorMsg(parsed);
     applyVisualInstructions(parsed.visual_instructions || []);
     state.messages.push({ role: 'assistant', content: parsed });
   } catch (err) {
     removeThinking(thinkingId);
     captureError(err);
-    appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: `Network error: ${err.message}` });
+    appendTutorMsg({ reply_type: 'teaching', assistant_text: `Network error: ${err.message}` });
   }
 }
 
@@ -185,11 +185,11 @@ export async function askTutorCheckScenario(task, extra = {}) {
     }));
     removeThinking(thinkingId);
     if (!data) {
-      const reply = { reply_type: 'direct_explanation', assistant_text: "I couldn't reach the tutor service." };
+      const reply = { reply_type: 'teaching', assistant_text: "I couldn't reach the tutor service." };
       appendTutorMsg(reply);
       return { verdict: 'fail', reply };
     }
-    const parsed = data.reply || { reply_type: 'direct_explanation', assistant_text: 'No reply.' };
+    const parsed = data.reply || { reply_type: 'teaching', assistant_text: 'No reply.' };
     appendTutorMsg(parsed);
     applyVisualInstructions(parsed.visual_instructions || []);
     state.messages.push({ role: 'assistant', content: parsed });
@@ -198,7 +198,7 @@ export async function askTutorCheckScenario(task, extra = {}) {
   } catch (err) {
     removeThinking(thinkingId);
     captureError(err);
-    const reply = { reply_type: 'direct_explanation', assistant_text: `Network error: ${err.message}` };
+    const reply = { reply_type: 'teaching', assistant_text: `Network error: ${err.message}` };
     appendTutorMsg(reply);
     return { verdict: 'fail', reply };
   }

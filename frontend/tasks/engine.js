@@ -267,7 +267,7 @@ export function enterSandbox() {
   clearCircuit();
   notifyActiveTaskChange();
   appendTutorMsg({
-    reply_type: 'direct_explanation',
+    reply_type: 'teaching',
     assistant_text: "You're in sandbox mode — build whatever you like. Feel free to ask any questions if you find anything interesting or confusing you'd like to discuss.",
   });
 }
@@ -319,7 +319,7 @@ function buildTaskIntro(t) {
 }
 
 function introduceTask(t) {
-  appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: buildTaskIntro(t) });
+  appendTutorMsg({ reply_type: 'teaching', assistant_text: buildTaskIntro(t) });
 }
 
 // Re-state the current task aim. Same content as the opening message —
@@ -328,7 +328,7 @@ function introduceTask(t) {
 export function remindActiveTask() {
   const t = getActiveTask();
   if (!t) return;
-  appendTutorMsg({ reply_type: 'direct_explanation', assistant_text: buildTaskIntro(t) });
+  appendTutorMsg({ reply_type: 'teaching', assistant_text: buildTaskIntro(t) });
 }
 
 export function renderTask() {
@@ -420,7 +420,7 @@ export async function checkActiveTask() {
       const meterLabel = t.data.targetMeter || 'the meter';
       const unit = t.data.targetUnit ? ` (in ${t.data.targetUnit})` : '';
       appendTutorMsg({
-        reply_type: 'direct_explanation',
+        reply_type: 'teaching',
         assistant_text: `What reading did you get from ${meterLabel}${unit}? Type the number in the chat and I'll check it.`,
       });
       return null;
