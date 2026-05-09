@@ -11,7 +11,7 @@
 // limits dislike parallel chatter. Pin OPENAI_MODEL before running so
 // summary.json's results are reproducible.
 
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { setupHarness, runProbe, writeSummary } from './helpers/harness.js';
 import * as C from './fixtures/circuits.js';
 
@@ -233,4 +233,45 @@ test.describe('tutor probes', () => {
       maps_to: ['§2.4', 'P4'],
     }));
   });
+});
+
+// ---- Frontend queue invariant (Task 11) -----------------------------------
+// Not a tutor-content probe; verifies that rapid-fire student messages
+// produce distinct turns instead of one '\n\n'-joined utterance.
+
+test('rapid-fire student messages produce distinct turns, not one joined turn', async ({ browser }) => {
+  const page = await browser.newPage();
+  // Capture all /api/tutor request bodies so we can assert on the wire shape,
+  // not just the rendered DOM.
+  const requestBodies = [];
+  page.on('request', (req) => {
+    if (req.url().includes('/api/tutor') && req.method() === 'POST') {
+      try { requestBodies.push(JSON.parse(req.postData() || '{}')); } catch (_e) {}
+    }
+  });
+
+  await page.goto('/');
+  // Three messages in quick succession; the debounce should still produce
+  // three separate POSTs (serialised because flushQueue awaits each).
+  for (const msg of ['hi', 'wait', 'actually nvm']) {
+    await page.locator('#chat-input').fill(msg);
+    await page.locator('#chat-send').click();
+  }
+
+  // Wait for three /api/tutor POSTs to complete.
+  await expect.poll(() => requestBodies.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(3);
+
+  // Three distinct user bubbles in the DOM, one per message.
+  await expect(page.locator('#messages .user-msg')).toHaveCount(3, { timeout: 10_000 });
+
+  // No request body should contain the joined batch the old code produced.
+  const joined = 'hi\n\nwait\n\nactually nvm';
+  for (const body of requestBodies.slice(0, 3)) {
+    expect(body.student_message || '').not.toContain(joined);
+  }
+  // And each body's student_message is one of the three originals.
+  const sent = requestBodies.slice(0, 3).map((b) => b.student_message);
+  expect(sent).toEqual(['hi', 'wait', 'actually nvm']);
+
+  await page.close();
 });

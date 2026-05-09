@@ -138,14 +138,12 @@ export async function askTutor(message) {
 
 async function flushQueue() {
   debounceTimer = null;
-  if (pendingRequest || queued.length === 0) return;
-  const batch = queued.length === 1 ? queued[0] : queued.join('\n\n');
-  queued = [];
-  pendingRequest = sendOneRequest(batch);
-  try { await pendingRequest; }
-  finally {
-    pendingRequest = null;
-    if (queued.length > 0) flushQueue();
+  if (pendingRequest) return;
+  while (queued.length > 0) {
+    const next = queued.shift();
+    pendingRequest = sendOneRequest(next);
+    try { await pendingRequest; }
+    finally { pendingRequest = null; }
   }
 }
 
