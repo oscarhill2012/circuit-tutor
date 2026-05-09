@@ -1,0 +1,8 @@
+tests/
+docs/
+graphify-out/
+node_modules/
+*.stackdump
+.gitignore
+.vercelignore
+playwright.config.js
