@@ -82,7 +82,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001 — never 500 the student
             traceback.print_exc(file=sys.stderr)
             self._respond(200, {
-                "reply": _safe_envelope(f"upstream error: {type(exc).__name__}: {exc}"),
+                "reply": _safe_envelope("server_error"),
                 "analysis": None,
                 "teaching_focus": None,
             })
