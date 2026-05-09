@@ -4,6 +4,7 @@
 // opens the task picker — same destination as the explicit "Tasks"
 // button on the right, but discoverable from the active context too.
 
+import { escapeHtml } from '../util/dom.js';
 import { state } from '../state/store.js';
 import { TASKS, getActiveTask, onActiveTaskChange, openTaskModal } from '../tasks/engine.js';
 
@@ -15,10 +16,6 @@ const TYPE_ICON = {
 };
 
 const TYPE_LABEL = { measure: 'Measure', problem: 'Problem', scenario: 'Scenario', exploration: 'Explore' };
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
 
 function taskTitle(t) {
   return t.data.brief || t.data.question || t.id;

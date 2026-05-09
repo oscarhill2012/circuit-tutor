@@ -337,7 +337,9 @@ def analyse(state):
         if ts:
             na, nb = cnet(ts[0]), cnet(ts[1])
             if na == nb:
-                # + and - already fused by wires/ammeters/closed switches.
+                # A wire shorting the cell is degenerate: topologically it IS a
+                # complete loop (current can flow), but it's also a short. Both
+                # flags are intentional.
                 complete_loop = True
                 short_circuit = True
             else:

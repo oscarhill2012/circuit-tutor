@@ -1,9 +1,9 @@
 // Right-hand tutor panel: chat messages, quick prompts, input field, help,
 // clear-chat and greet. Also owns the KaTeX inline renderer for $…$ spans.
 
+import { escapeHtml } from '../util/dom.js';
 import { state } from '../state/store.js';
 import {
-  escapeHtml,
   getActiveTask,
   remindActiveTask,
   checkActiveTask,

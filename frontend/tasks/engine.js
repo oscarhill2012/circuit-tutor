@@ -13,6 +13,7 @@
 //     voltmeter correctly placed on a target component, with current,
 //     voltage and inferred R = V/I all matching expected values within tol.
 
+import { escapeHtml } from '../util/dom.js';
 import { state } from '../state/store.js';
 import { askTutorCheckScenario } from '../tutor/api.js';
 import { loadInitialCircuit, clearCircuit } from '../state/actions.js';
@@ -30,10 +31,6 @@ export async function loadTasks() {
   TASKS.length = 0;
   for (const t of data.tasks) TASKS.push(t);
   return TASKS;
-}
-
-export function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function shuffleSeed(arr, seed) {

@@ -82,6 +82,11 @@ Reply:
   "rolling_summary": "Greeted student warmly."
 }
 
+Note on `safety.in_scope`: this is `true` for any reply that addresses the
+student in good faith — teaching, ack, and verdict turns are all in_scope.
+Only set `in_scope: false` for refusal turns, where the student request is
+out of scope and the agent declines to engage with the topic.
+
 Exemplar 3 — Misconception (voltmeter in series). Student: "why is the bulb off?"
 Tools (in order): analyse_topology(); lookup_knowledge({"query": "voltmeter in series"}); cite_fact({"kb_id": "kb.misconception.voltmeter_in_series", "claim": "A voltmeter in series interrupts the loop"}); mark_target({"target": "V1", "action": "mark_error"}); update_session_state({"observed_misconceptions": ["kb.misconception.voltmeter_in_series"]})
 Reply:

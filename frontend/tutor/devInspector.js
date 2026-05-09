@@ -11,7 +11,7 @@
 // the post-validator without re-invoking the model. The prod UI never sets
 // that flag, so this has zero effect on normal traffic.
 
-import { escapeHtml } from '../tasks/engine.js';
+import { escapeHtml } from '../util/dom.js';
 
 const DEV_FLAG_KEY = 'devMode';
 
