@@ -48,7 +48,7 @@ def call_model(
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not set")
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=20.0)
     model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
     kwargs: dict[str, Any] = {

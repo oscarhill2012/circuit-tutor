@@ -82,24 +82,44 @@ function buildSlimPayload(studentMessage, extras = {}) {
   };
 }
 
-async function postOnce(payload) {
+// Wraps the server fetch with an AbortController so the spinner can't spin
+// forever. Server-side timeout is 20s (api/llm_client.py); client cap is 25s
+// so the server's friendly fallback envelope reaches the student first.
+// `signal` (optional): an external AbortSignal that, if aborted, also
+// cancels this request — matches the shape callers will eventually use to
+// cancel in-flight turns.
+async function postOnce(payload, { signal } = {}) {
   if (isDevMode()) payload.debug = true;
   captureRequest(payload);
-  const res = await fetch(TUTOR_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    captureError(`HTTP ${res.status}`);
-    return null;
+  const controller = new AbortController();
+  const timeoutMs = 25000;
+  const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
+  if (signal) signal.addEventListener('abort', () => controller.abort(signal.reason));
+  try {
+    const res = await fetch(TUTOR_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      captureError(`HTTP ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    captureResponse(data);
+    if (data.debug && data.debug.tool_ledger && typeof captureToolLedger === 'function') {
+      captureToolLedger(data.debug.tool_ledger);
+    }
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Volt is taking longer than usual — try again in a moment.');
+    }
+    throw err;
   }
-  const data = await res.json();
-  captureResponse(data);
-  if (data.debug && data.debug.tool_ledger && typeof captureToolLedger === 'function') {
-    captureToolLedger(data.debug.tool_ledger);
-  }
-  return data;
 }
 
 // Repeated-message debouncing: same as legacy api.js.
