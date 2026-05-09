@@ -29,6 +29,7 @@ from schemas import (
 
 RejectReason = Literal[
     "no_tools_called",
+    "ack_text_not_pleasantry",
     "refusal_with_other_tools",
     "refusal_text_mismatch",
     "uncited_physics_claim",
@@ -49,6 +50,37 @@ class Accept:
 class Reject:
     reason: RejectReason
     detail: str
+
+
+# ---------------------------------------------------------------------------
+# Ack envelope shape — close the jailbreak bypass
+# ---------------------------------------------------------------------------
+
+# Short keywords that must appear (case-insensitive) for an ack to qualify
+# as a social pleasantry. Anything that is not greeting-shaped is suspect:
+# the ack reply_type bypasses the no-tools-called rule, so any longer or
+# off-topic content riding the ack envelope would otherwise reach the user
+# without grounding. See `_ack_text_is_pleasantry` and the validator's
+# tool-invariant branch in `validate_final_reply`.
+_ACK_PLEASANTRY_KEYWORDS = (
+    "hi", "hello", "hey", "thanks", "thank you", "thx", "cheers",
+    "welcome", "great", "ok", "okay", "got it", "sure",
+    "no problem", "you're welcome", "glad",
+)
+
+
+def _ack_text_is_pleasantry(text: str) -> bool:
+    """True iff `text` looks like a short social acknowledgement.
+
+    Must be <= 120 chars, contain at least one pleasantry keyword, and
+    not contain a question mark (questions are pedagogy, not pleasantries).
+    """
+    if not text or len(text) > 120:
+        return False
+    if "?" in text:
+        return False
+    lowered = text.lower()
+    return any(kw in lowered for kw in _ACK_PLEASANTRY_KEYWORDS)
 
 
 # ---------------------------------------------------------------------------
@@ -153,8 +185,16 @@ def validate_final_reply(
     # `ack` turns (greetings, thanks, acknowledgements) are pure social
     # pleasantries with no physics content and so are exempt from the
     # tool-call requirement. Every other reply type must ground itself in
-    # at least one tool call.
-    if not ledger.calls and env.reply_type != "ack":
+    # at least one tool call. Ack envelopes have additional shape rules
+    # (see `_ack_text_is_pleasantry`) so the bypass cannot be used to
+    # smuggle off-topic content past validation.
+    if env.reply_type == "ack":
+        if not _ack_text_is_pleasantry(env.assistant_text):
+            return Reject(
+                "ack_text_not_pleasantry",
+                f"ack assistant_text must be a short greeting/thanks; saw {env.assistant_text!r}",
+            )
+    elif not ledger.calls:
         return Reject("no_tools_called", "ledger is empty; at least one tool call is required")
 
     # ---- 2. refusal exclusivity -------------------------------------------

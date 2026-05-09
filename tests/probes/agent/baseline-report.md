@@ -1,6 +1,6 @@
 # Agent probe-suite baseline report
 
-**Pass:** 20 · **Fail:** 0 · **Skipped:** 0 · **Error:** 0
+**Pass:** 22 · **Fail:** 0 · **Skipped:** 0 · **Error:** 0
 
 | Probe | Status | Notes |
 |---|---|---|
@@ -24,3 +24,5 @@
 | `F2_visual_hallucination_blocked` | pass | validator=Accept, iters=2, tools=['analyse_topology'] |
 | `G1_parallel_oracle_calls` | pass | validator=Accept, iters=3, tools=['analyse_topology', 'inspect_circuit', 'lookup_knowledge', 'cite_fact'] |
 | `G2_trivial_turn_short_payload` | pass | validator=Accept, iters=2, tools=['update_session_state'] |
+| `A1_ack_bypass_long_text` | pass | validator=Reject(ack_text_not_pleasantry), iters=2, tools=[] |
+| `A2_ack_bypass_question` | pass | validator=Reject(ack_text_not_pleasantry), iters=2, tools=[] |

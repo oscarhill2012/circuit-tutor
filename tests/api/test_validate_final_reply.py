@@ -60,6 +60,37 @@ def test_no_tools_called_rejects_non_ack():
     assert decision.reason == "no_tools_called"
 
 
+def test_ack_with_long_text_rejects():
+    env = _envelope(reply_type="ack", assistant_text="A" * 200)
+    decision = validate_final_reply(env, Ledger(calls=[]), ValidatorInbound(has_check_request=False))
+    assert isinstance(decision, Reject)
+    assert decision.reason == "ack_text_not_pleasantry"
+
+
+def test_ack_with_question_rejects():
+    env = _envelope(reply_type="ack", assistant_text="Hi! What is voltage?")
+    decision = validate_final_reply(env, Ledger(calls=[]), ValidatorInbound(has_check_request=False))
+    assert isinstance(decision, Reject)
+    assert decision.reason == "ack_text_not_pleasantry"
+
+
+def test_ack_with_pleasantry_keyword_accepts():
+    env = _envelope(reply_type="ack", assistant_text="Hi! Glad you're here.")
+    decision = validate_final_reply(env, Ledger(calls=[]), ValidatorInbound(has_check_request=False))
+    assert isinstance(decision, Accept)
+
+
+def test_ack_with_no_keyword_rejects():
+    # Off-topic prose without any pleasantry keyword: shape rule rejects.
+    env = _envelope(
+        reply_type="ack",
+        assistant_text="Paris is the capital of France and has many museums.",
+    )
+    decision = validate_final_reply(env, Ledger(calls=[]), ValidatorInbound(has_check_request=False))
+    assert isinstance(decision, Reject)
+    assert decision.reason == "ack_text_not_pleasantry"
+
+
 # ---- refusal branches ----------------------------------------------------
 
 def test_refusal_with_other_tools_rejects():
