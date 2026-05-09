@@ -472,11 +472,16 @@ def run_agent(
         content=final_envelope.assistant_text,
         tool_calls_summary=_summarise_calls(ctx.call_records),
     )
-    if final_envelope.state_summary.observed_misconceptions:
-        store.update(
-            inbound.session_id,
-            observed_misconceptions=final_envelope.state_summary.observed_misconceptions,
-        )
+    state_summary = final_envelope.state_summary
+    update_kwargs: dict[str, Any] = {}
+    if state_summary.observed_misconceptions:
+        update_kwargs["observed_misconceptions"] = state_summary.observed_misconceptions
+    if final_envelope.rolling_summary:
+        update_kwargs["rolling_summary"] = final_envelope.rolling_summary
+    if state_summary.next_step:
+        update_kwargs["next_step"] = state_summary.next_step
+    if update_kwargs:
+        store.update(inbound.session_id, **update_kwargs)
 
     # Pull the analysis (if any) out of the ledger for the response envelope.
     analysis_dict: dict[str, Any] | None = None

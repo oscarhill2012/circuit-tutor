@@ -607,6 +607,7 @@ def update_session_state(
         applied["current_goal"] = args.current_goal
 
     if args.next_step is not None:
+        session.next_step = args.next_step
         applied["next_step"] = args.next_step
 
     if args.observed_misconceptions is not None:

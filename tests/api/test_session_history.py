@@ -129,3 +129,95 @@ def test_session_store_persists_next_step():
     store = SessionStore()
     state = store.update("next-step-test", next_step="ask the student to wire V1 across L1")
     assert state.next_step == "ask the student to wire V1 across L1"
+
+
+# ---------------------------------------------------------------------------
+# Fix 1 regression: update_session_state tool must write to session object
+# ---------------------------------------------------------------------------
+
+def test_update_session_state_tool_sets_next_step_on_session():
+    """update_session_state must write next_step to the session object, not
+    just record it in the audit dict.
+
+    Covers the regression where `session.next_step = args.next_step` was
+    missing — the tool returned applied["next_step"] but the session was
+    never mutated, so history never persisted the value.
+    """
+    from schemas import SessionState, UpdateSessionStateArgs
+    from tools import update_session_state
+
+    session = SessionState(session_id="tool-next-step-test")
+    args = UpdateSessionStateArgs(next_step="ask about parallel circuits")
+
+    result = update_session_state(args, session=session)
+
+    assert result.ok, f"tool returned not-ok: {result.rejected}"
+    assert result.applied.get("next_step") == "ask about parallel circuits"
+    assert session.next_step == "ask about parallel circuits", (
+        "update_session_state did not mutate session.next_step — "
+        "the write to session was missing"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 regression: run_agent must persist next_step + rolling_summary
+# ---------------------------------------------------------------------------
+
+def _envelope_with_state_json(next_step: str, rolling_summary: str) -> str:
+    """Build an ack envelope JSON that carries a non-empty next_step and
+    rolling_summary so the agent-loop persist path is exercised."""
+    return json.dumps({
+        "reply_type": "ack",
+        "assistant_text": "Got it.",
+        "follow_up_question": "",
+        "verdict": "",
+        "visual_instructions": [],
+        "safety": {"in_scope": True, "reason": ""},
+        "fact_checks": [],
+        "state_summary": {
+            "current_goal": "",
+            "observed_misconceptions": [],
+            "next_step": next_step,
+        },
+        "rolling_summary": rolling_summary,
+    })
+
+
+class StatefulStub:
+    """Stub `call_model` that returns a single fixed envelope carrying
+    state fields so the agent-loop persist path in run_agent is exercised."""
+
+    def __init__(self, next_step: str, rolling_summary: str) -> None:
+        self._json = _envelope_with_state_json(next_step, rolling_summary)
+
+    def __call__(self, messages, tools, *, tool_choice="auto", **_kwargs):
+        return ModelResponse(
+            content=self._json,
+            tool_calls=[],
+            finish_reason="stop",
+        )
+
+
+def test_run_agent_persists_next_step_and_rolling_summary():
+    """After run_agent completes, the session store must contain the
+    next_step and rolling_summary values that were in the final envelope.
+
+    Covers the regression where agent_runner.py only persisted
+    observed_misconceptions and left the other two fields as dead reads.
+    """
+    store = SessionStore()
+    session_id = "agent-persist-state-test"
+    stub = StatefulStub(
+        next_step="ask about parallel circuits",
+        rolling_summary="student is exploring series circuits",
+    )
+
+    run_agent(_request(session_id, "How do I wire two bulbs?"), store=store, llm_call=stub)
+
+    state = store.get_or_create(session_id)
+    assert state.next_step == "ask about parallel circuits", (
+        "run_agent did not persist next_step from the envelope's state_summary"
+    )
+    assert state.rolling_summary == "student is exploring series circuits", (
+        "run_agent did not persist rolling_summary from the envelope"
+    )
