@@ -147,10 +147,10 @@ async function flushQueue() {
   }
 }
 
-async function sendOneRequest(combinedMessage) {
+async function sendOneRequest(message) {
   const thinkingId = appendThinking();
   try {
-    const data = await postOnce(buildSlimPayload(combinedMessage));
+    const data = await postOnce(buildSlimPayload(message));
     removeThinking(thinkingId);
     if (!data) {
       appendTutorMsg({ reply_type: 'teaching', assistant_text: "I couldn't reach the tutor service." });

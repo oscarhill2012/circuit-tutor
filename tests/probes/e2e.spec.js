@@ -259,7 +259,8 @@ test('rapid-fire student messages produce distinct turns, not one joined turn', 
   }
 
   // Wait for three /api/tutor POSTs to complete.
-  await expect.poll(() => requestBodies.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(3);
+  // 60 s: three serialised real-LLM roundtrips can exceed 30 s under load.
+  await expect.poll(() => requestBodies.length, { timeout: 60_000 }).toBeGreaterThanOrEqual(3);
 
   // Three distinct user bubbles in the DOM, one per message.
   await expect(page.locator('#messages .user-msg')).toHaveCount(3, { timeout: 10_000 });
