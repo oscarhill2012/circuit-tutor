@@ -9,6 +9,7 @@ mutate state, does not call the model, does not retry. The agent loop in
 
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -56,31 +57,41 @@ class Reject:
 # Ack envelope shape — close the jailbreak bypass
 # ---------------------------------------------------------------------------
 
-# Short keywords that must appear (case-insensitive) for an ack to qualify
-# as a social pleasantry. Anything that is not greeting-shaped is suspect:
-# the ack reply_type bypasses the no-tools-called rule, so any longer or
-# off-topic content riding the ack envelope would otherwise reach the user
-# without grounding. See `_ack_text_is_pleasantry` and the validator's
-# tool-invariant branch in `validate_final_reply`.
+# Short keywords that must appear (whole-word, case-insensitive) for an ack
+# to qualify as a social pleasantry. Anything that is not greeting-shaped is
+# suspect: the ack reply_type bypasses the no-tools-called rule, so any longer
+# or off-topic content riding the ack envelope would otherwise reach the user
+# without grounding. Matching is word-boundary anchored (see _ACK_PLEASANTRY_RE)
+# so "ok" cannot match inside "broker", "welcome" cannot match inside "unwelcome",
+# etc. See `_ack_text_is_pleasantry` and the validator's tool-invariant branch
+# in `validate_final_reply`.
 _ACK_PLEASANTRY_KEYWORDS = (
     "hi", "hello", "hey", "thanks", "thank you", "thx", "cheers",
     "welcome", "great", "ok", "okay", "got it", "sure",
     "no problem", "you're welcome", "glad",
 )
 
+# Word-boundary regex built once at module load. re.IGNORECASE handles case so
+# we don't need to lower the input; re.escape handles apostrophes and spaces
+# inside multi-word keywords; \b anchors prevent substring false positives.
+_ACK_PLEASANTRY_RE = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in _ACK_PLEASANTRY_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
+
 
 def _ack_text_is_pleasantry(text: str) -> bool:
     """True iff `text` looks like a short social acknowledgement.
 
-    Must be <= 120 chars, contain at least one pleasantry keyword, and
-    not contain a question mark (questions are pedagogy, not pleasantries).
+    Must be <= 120 chars, contain at least one pleasantry keyword matched at
+    word boundaries (not as a substring of another word), and not contain a
+    question mark (questions are pedagogy, not pleasantries).
     """
     if not text or len(text) > 120:
         return False
     if "?" in text:
         return False
-    lowered = text.lower()
-    return any(kw in lowered for kw in _ACK_PLEASANTRY_KEYWORDS)
+    return bool(_ACK_PLEASANTRY_RE.search(text))
 
 
 # ---------------------------------------------------------------------------
