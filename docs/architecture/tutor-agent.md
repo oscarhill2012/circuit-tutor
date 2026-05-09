@@ -72,7 +72,7 @@ The catalogue lives in `api/tools.py`. Pydantic schemas are in
 The contract surface is small enough that adding a tool means: pydantic
 schema in `schemas.py`, pure function in `tools.py`, dispatch entry in
 `tool_dispatch.py:_run_tool`, validator update if it owns part of the
-contract, probe in `tests/tutor-probes/v2/probes.py`.
+contract, probe in `tests/probes/agent/probes.py`.
 
 ---
 
@@ -113,7 +113,7 @@ in `agent_runner.run_agent`; copy it.
 
 ## 4. Probe authoring (assertion DSL)
 
-Probes live in `tests/tutor-probes/v2/probes.py`. The harness
+Probes live in `tests/probes/agent/probes.py`. The harness
 (`harness.py`) calls `run_agent()` directly, asserts on the **tool
 ledger**, not on assistant text.
 
@@ -238,7 +238,7 @@ For each new tool that needs a tutor:
    ```
    api/{schemas,tools,session_store,refusal_render,tool_dispatch,
                   agent_runner,system_prompt,llm_client,claim_classifier}.py
-   tests/tutor-probes/v2/{harness,fixtures,probes,run}.py
+   tests/probes/agent/{harness,fixtures,probes,run}.py
    scripts/embed_kb.py
    ```
 2. Rename Group B oracle tools for your domain (the function bodies, the
