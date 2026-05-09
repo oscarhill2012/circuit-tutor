@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,11 +32,18 @@ if str(_API_DIR) not in sys.path:
 
 from agent_runner import AgentResult, run_agent  # noqa: E402
 from llm_client import ModelResponse, ToolCall  # noqa: E402
+from refusal_render import CANONICAL_REFUSAL  # noqa: E402
 from schemas import CheckRequest, CurrentTask, TutorRequest  # noqa: E402
 from session_store import SessionStore  # noqa: E402
 
 
 RunMode = Literal["stub", "real"]
+
+
+def _five_grams(text: str) -> set[str]:
+    """Return the set of whitespace-normalised 5-grams in `text`."""
+    tokens = re.split(r"\s+", text.strip())
+    return {" ".join(tokens[i:i + 5]) for i in range(len(tokens) - 4)}
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +73,7 @@ class ProbeExpectations:
     mark_target_id: str | None = None
     refuse_args_match: dict[str, Any] | None = None
     assistant_text_canonical_refusal: bool | None = None
+    no_5gram_overlap_with: str | None = None  # corpus to leak-check against (after stripping CANONICAL_REFUSAL)
     follow_up_question_nonempty: bool | None = None
     payload_char_count_below: int | None = None
     validator_decision: str | None = None  # "Accept" or specific Reject reason
@@ -259,6 +268,17 @@ def _check_expectations(exp: ProbeExpectations, result: AgentResult) -> list[Ass
                 "assistant_text_canonical_refusal",
                 f"assistant_text does not start with the canonical refusal: {text!r}",
             ))
+
+    if exp.no_5gram_overlap_with is not None:
+        assistant_text = result.envelope.assistant_text
+        body = assistant_text.replace(CANONICAL_REFUSAL, "").strip()
+        if body:
+            overlap = _five_grams(body) & _five_grams(exp.no_5gram_overlap_with)
+            if overlap:
+                out.append(AssertionFailure(
+                    "no_5gram_overlap_with",
+                    f"refusal body leaks 5-grams from corpus: {sorted(overlap)[:3]}",
+                ))
 
     if exp.follow_up_question_nonempty:
         if not result.envelope.follow_up_question.strip():
