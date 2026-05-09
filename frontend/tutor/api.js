@@ -123,7 +123,7 @@ async function postOnce(payload, { signal } = {}) {
 }
 
 // Repeated-message debouncing: same as legacy api.js.
-const DEBOUNCE_MS = 200;
+const DEBOUNCE_MS = 400;
 let pendingRequest = null;
 let queued = [];
 let debounceTimer = null;
