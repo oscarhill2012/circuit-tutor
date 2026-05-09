@@ -347,6 +347,19 @@
       "requires_citation": false
     },
     {
+      "id": "kb.misconception.ammeter_terminals_shorted",
+      "topic": "misconceptions",
+      "role": "misconception",
+      "tags": [
+        "misconception",
+        "ammeter",
+        "meter",
+        "wiring"
+      ],
+      "fact": "An ammeter has both terminals connected to the same junction by a single wire, bypassing the rest of the circuit. The ammeter reads zero or near-zero because no useful path runs through it. Move one terminal to a different junction so the ammeter sits in the current path.",
+      "requires_citation": false
+    },
+    {
       "id": "kb.misconception.parallel_more_paths",
       "topic": "misconceptions",
       "role": "misconception",

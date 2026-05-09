@@ -454,7 +454,7 @@ def analyse(state):
                 meter_issues.append({
                     "meter": mid,
                     "issue": "ammeter_shorted_by_wire",
-                    "misconception_id": "kb.misconception.ammeter_in_parallel",
+                    "misconception_id": "kb.misconception.ammeter_terminals_shorted",
                 })
                 continue
             # In-parallel iff this ammeter's edge is not a bridge in the
