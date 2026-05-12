@@ -20,3 +20,5 @@ docs/plans/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+.claude
