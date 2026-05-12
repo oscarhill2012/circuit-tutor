@@ -4,12 +4,21 @@
 
 import { state, SVG_W, SVG_H, EPS } from '../state/store.js';
 import { Tool, Sel, SelKind } from '../state/constants.js';
-import { COMP, COMP_SCALE } from './schema.js';
+import {
+  COMP, COMP_SCALE,
+  // Bar geometry: single source of truth shared with wiring/router.js so
+  // the router's stub length and the renderer's "is the first segment long
+  // enough to fit a bar?" gate can't drift apart.
+  BAR_LEN_LOCAL, BAR_T_LOCAL,
+  BAR_LEN, BAR_T,
+  BAR_TERMINAL_GAP, BAR_POST_GAP,
+  COMP_BAR_TYPES,
+} from './schema.js';
 import { editor, onCompMouseDown, onTerminalPointerDown } from './editor.js';
 import { deleteWire, deleteComponent, splitWireAtCorner } from '../state/actions.js';
 import { termPos, endpointPos } from './geometry.js';
 import { route as routePath, segOverlap } from './wiring/router.js';
-import { collectComponentBoxes, collectWireSegments } from './wiring/obstacles.js';
+import { collectComponentBoxes, collectWireSegments, componentBoxesFor, pathHitsAnyBox } from './wiring/obstacles.js';
 import { toSvgPath, previewPath } from './wiring/path.js';
 import { isDevMode } from '../tutor/devInspector.js';
 
@@ -142,10 +151,18 @@ function near(a, b) {
 
 // While a component is being dragged, reroute wires attached to it in real
 // time so they stay obstacle-aware instead of cutting through other parts.
-function dragPreviewPts(w) {
+//
+// `liveWireIds` is the set of every wire attached to a dragged component —
+// each of those wires is being rerouted this frame, so their cached paths
+// (from the pre-drag position) are stale. Treating them as obstacles makes
+// each wire dodge the ghost of its siblings' previous positions, which is
+// why dragging a multi-wire component used to scatter the wiring. Passing
+// all of them in excludeWires keeps every live reroute working from the
+// same fresh obstacle picture.
+function dragPreviewPts(w, liveWireIds) {
   const next = routePath(w.a, w.b, {
     excludeComps: [w.a.compId, w.b.compId].filter(Boolean),
-    excludeWires: [w.id],
+    excludeWires: liveWireIds && liveWireIds.length ? liveWireIds : [w.id],
     previousPath: w.path,
   });
   if (next && next.length >= 2) return next;
@@ -159,17 +176,39 @@ function dragPreviewPts(w) {
   return [p0, { x: p0.x, y: p0.y + dy / 2 }, { x: pn.x, y: p0.y + dy / 2 }, pn];
 }
 
-// Reroute wires that touch any of the given components. Called from the
-// editor after a drag finishes so only affected wires move.
+// Reroute wires that touch any of the given components — OR whose cached
+// path now passes through one of those components' new footprints. Called
+// from the editor after a drag finishes so only affected wires move.
+//
+// The footprint check matters because dragging a component over an unrelated
+// wire used to leave that wire's stale path cutting straight through the
+// component body: the wire didn't touch the moved component, so the
+// "touched" set ignored it. We additionally include any wire whose cached
+// geometry intersects the moved components' boxes — see pathHitsAnyBox in
+// wiring/obstacles.js.
+//
+// All affected wires are collected up-front and passed to every reroute as
+// excludeWires — otherwise wire B sees wire A's stale pre-drag path as a
+// real obstacle while A is the first to reroute, and the resulting wiring
+// fights between two "snapshots" of itself. See dragPreviewPts comment.
 export function rerouteWiresFor(componentIds) {
   const touched = new Set(componentIds);
+  const movedBoxes = componentBoxesFor(componentIds);
+  const affected = [];
   for (const w of state.wires) {
     const aHit = w.a.compId && touched.has(w.a.compId);
     const bHit = w.b.compId && touched.has(w.b.compId);
-    if (!aHit && !bHit) continue;
+    const cutsThrough = !aHit && !bHit && pathHitsAnyBox(w.path, movedBoxes);
+    if (aHit || bHit || cutsThrough) affected.push(w);
+  }
+  if (!affected.length) return;
+
+  const excludeWires = affected.map(w => w.id);
+
+  for (const w of affected) {
     const next = routePath(w.a, w.b, {
       excludeComps: [w.a.compId, w.b.compId].filter(Boolean),
-      excludeWires: [w.id],
+      excludeWires,
       previousPath: w.path,
     });
     if (next && next.length >= 2) w.path = next;
@@ -223,13 +262,39 @@ export function render() {
       if (a > refCurrent) refCurrent = a;
     }
   }
+  // Precompute the set of "live" wires for this frame: every wire attached
+  // to the currently-dragged component, plus any wire whose cached path
+  // currently cuts through the dragged component's new footprint. The
+  // latter group catches unrelated wires that would otherwise visually pass
+  // straight through the component being dragged over them (matches the
+  // post-drag-end logic in rerouteWiresFor).
+  //
+  // Every live reroute this frame excludes all live wire ids from its
+  // obstacle set so the wires don't dodge each other's stale cached paths.
+  // See dragPreviewPts comment.
+  const liveWireIds = [];
+  const liveWireSet = new Set();
+  if (draggingComp) {
+    const dragBoxes = componentBoxesFor([draggingComp]);
+    for (const w of state.wires) {
+      const attached = w.a.compId === draggingComp || w.b.compId === draggingComp;
+      const cutsThrough = !attached && pathHitsAnyBox(w.path, dragBoxes);
+      if (attached || cutsThrough) {
+        liveWireIds.push(w.id);
+        liveWireSet.add(w.id);
+      }
+    }
+  }
+
   const wireInfos = [];
   for (const w of state.wires) {
     // During a drag, route the live wires without writing to w.path so a
-    // single drop still gets a proper post-drag reroute.
-    const isLive = draggingComp && (w.a.compId === draggingComp || w.b.compId === draggingComp);
+    // single drop still gets a proper post-drag reroute. "Live" includes
+    // both wires attached to the dragged component and wires whose stale
+    // path now intersects it (see liveWireSet construction above).
+    const isLive = draggingComp && liveWireSet.has(w.id);
     const pts = isLive ? null : resolveWirePath(w);
-    const fullPts = isLive ? dragPreviewPts(w) : pts;
+    const fullPts = isLive ? dragPreviewPts(w, liveWireIds) : pts;
     if (!fullPts || fullPts.length < 2) continue;
     let cls = 'wire';
     let flowDur = null;     // seconds — null = inactive
@@ -805,20 +870,12 @@ function buildWireIndices() {
 //    cleanly on the wire instead of underlapping it.
 // ---------------------------------------------------------------------------
 
-const COMP_BAR_TYPES = new Set(['cell', 'battery', 'resistor', 'bulb']);
-// Shared bar dimensions in component-local space — voltage bar uses these
-// directly (auto-scaled by the comp's scale(COMP_SCALE) transform), current bar
-// multiplies by COMP_SCALE so both render at the same world-space size at any
-// COMP_SCALE setting. Same coupling for the bar-label font size: V-label
-// divides by COMP_SCALE to compensate for being inside the scaled group.
-const BAR_LEN_LOCAL = 54;
-const BAR_T_LOCAL = 6;
-const BAR_LEN = BAR_LEN_LOCAL * COMP_SCALE;
-const BAR_T = BAR_T_LOCAL * COMP_SCALE;
+// BAR_LEN_LOCAL / BAR_T_LOCAL / BAR_LEN / BAR_T / COMP_BAR_TYPES / bar gaps
+// all live in schema.js so the router can predict bar footprints (see
+// wiring/router.js).  The bar-label font sizing stays here because it's a
+// pure renderer concern.
 const BAR_LABEL_WORLD_PX = 12;
 const BAR_LABEL_LOCAL_PX = BAR_LABEL_WORLD_PX / COMP_SCALE;
-const TERMINAL_GAP = 24;     // breathing space between terminal and bar
-const POST_BAR_GAP = 24;     // space between bar end and next 90° turn
 
 function planWireBars() {
   // Returns Map<wireId, { start?: barInfo, end?: barInfo }>
@@ -906,11 +963,11 @@ function computeBarGeom(pts, atStart, info) {
   const b = atStart ? pts[1] : pts[pts.length - 2];
   const dx = b.x - a.x, dy = b.y - a.y;
   const segLen = Math.hypot(dx, dy);
-  if (segLen < TERMINAL_GAP + BAR_LEN + POST_BAR_GAP) return null; // first segment too short — bail
+  if (segLen < BAR_TERMINAL_GAP + BAR_LEN + BAR_POST_GAP) return null; // first segment too short — bail
   const ux = dx / segLen, uy = dy / segLen;
 
-  const bx0 = a.x + ux * TERMINAL_GAP;
-  const by0 = a.y + uy * TERMINAL_GAP;
+  const bx0 = a.x + ux * BAR_TERMINAL_GAP;
+  const by0 = a.y + uy * BAR_TERMINAL_GAP;
 
   const horiz = Math.abs(ux) > Math.abs(uy);
   let rectX, rectY, rectW, rectH;

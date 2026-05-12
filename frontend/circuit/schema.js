@@ -9,6 +9,46 @@
 // SVG `scale(COMP_SCALE)` transform so visuals and hit areas stay aligned.
 export const COMP_SCALE = 1.4;
 
+
+// ---------------------------------------------------------------------------
+// Current/voltage bar geometry — shared by renderer.js (draws the bars) and
+// wiring/router.js (reserves enough stub length on bar-eligible endpoints so
+// the bar can render at all). Keeping these in one place is the only way to
+// stop the router's STUB length and the renderer's "is the first segment
+// long enough to fit a bar?" gate from drifting apart and silently dropping
+// bars on wires whose first segment is just barely too short.
+//
+// BAR_LEN_LOCAL / BAR_T_LOCAL are in component-local space (inside the
+// COMP_SCALE transform) — voltage bars use them directly. BAR_LEN / BAR_T
+// are the world-space sizes — wire-current bars use these so both bar
+// flavours render at the same physical size on screen regardless of
+// COMP_SCALE.
+// ---------------------------------------------------------------------------
+
+export const BAR_LEN_LOCAL = 54;
+export const BAR_T_LOCAL = 6;
+
+export const BAR_LEN = BAR_LEN_LOCAL * COMP_SCALE;
+export const BAR_T = BAR_T_LOCAL * COMP_SCALE;
+
+// Breathing room around a wire-current bar: TERMINAL_GAP between the
+// connector and the bar, POST_BAR_GAP between the bar's far end and the
+// first 90° turn.
+export const BAR_TERMINAL_GAP = 24;
+export const BAR_POST_GAP = 24;
+
+// Total footprint a wire-current bar needs along its mount segment.
+// The router uses this (plus a small slack) as the minimum stub length on
+// bar-eligible endpoints, and the renderer uses it as the "is this segment
+// long enough to draw a bar?" gate. One source of truth.
+export const BAR_FOOTPRINT = BAR_TERMINAL_GAP + BAR_LEN + BAR_POST_GAP;
+
+// Component types whose wires can carry a current bar. Used both by the
+// renderer (to decide which components emit a bar) and by the router (to
+// predict which endpoints are bar-eligible so it reserves the long stub
+// only where needed).
+export const COMP_BAR_TYPES = new Set(['cell', 'battery', 'resistor', 'bulb']);
+
 export const COMP = {
   cell:      { w: 60, h: 40, terms: [{n:'+', x:-30, y:0}, {n:'-', x:30, y:0}], defaultProps: { voltage: 6 } },
   battery:   { w: 80, h: 40, terms: [{n:'+', x:-40, y:0}, {n:'-', x:40, y:0}], defaultProps: { voltage: 12 } },

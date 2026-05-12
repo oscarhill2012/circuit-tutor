@@ -8,27 +8,105 @@
 // synchronously in the browser.
 
 import { state } from '../../state/store.js';
+import { COMP, COMP_BAR_TYPES, BAR_FOOTPRINT } from '../schema.js';
 import { endpointPos, endpointDir, advance } from '../geometry.js';
 import { collectComponentBoxes, collectWireSegments } from './obstacles.js';
 
 // Tunables --------------------------------------------------------------
-const STUB = 112;         // length of mandatory source/target stub
-                           // (sized to fit a current-readout bar plus
-                           // breathing room: 24px gap + 64px bar + 24px tail)
+
+// Stub length for endpoints that will display a current bar. Must be at
+// least BAR_FOOTPRINT (= TERMINAL_GAP + BAR_LEN + POST_BAR_GAP, defined in
+// schema.js) plus a small slack — otherwise the renderer's "is the first
+// segment long enough?" gate in computeBarGeom() bails and the bar
+// silently doesn't appear. The +8 slack absorbs sub-pixel layout drift
+// plus the corner-radius eaten by toSvgPath.
+const STUB_BAR = Math.ceil(BAR_FOOTPRINT) + 8;
+
+// Stub length for endpoints that won't show a bar (junctions with <3
+// wires, the loser-terminal on bar-emitting components). Just enough
+// breathing room to leave the connector cleanly before turning.
+const STUB_PLAIN = 40;
+
 const BEND_COST = 22;     // penalty per 90° turn
 const CROSSING_COST = 220; // penalty per existing wire crossed — strongly discouraged
 const OVERLAP_COST = 240; // penalty per axis-aligned overlap with existing wire
 const NEAR_COST = 3;      // penalty per segment that hugs an obstacle edge
 const REUSE_BONUS = 8;    // reward per segment reused from previous path
 const LANE_STEP = 10;     // offset applied when a cleaner lane is available
+
+// Minimum length any non-stub segment may have after a lane nudge. Below
+// roughly 2×CORNER_R the rounded corners on either side overlap and the
+// bend visually folds into a "kink". Keeping adjacent legs >= this value
+// preserves a clean elbow on each side of the shifted segment.
+const MIN_LEG_AFTER_NUDGE = 16;
+
 // Just above BEND_COST so the router is willing to "spend a bend" rather
 // than depart srcStub or arrive at tgtStub along the stub axis. Without this
 // penalty, A* often takes a parallel-arrival path of equal-or-lower cost,
 // and simplify() then collapses the mandatory stub corner — leaving the
-// wire's first/last segment shorter than STUB and (downstream) breaking the
-// current-bar geometry gate, plus pushing the wire's terminal segment
-// inside the destination component's clearance box.
+// wire's first/last segment shorter than the bar footprint and (downstream)
+// breaking the current-bar geometry gate, plus pushing the wire's terminal
+// segment inside the destination component's clearance box.
+//
+// Applied only on bar-eligible endpoints (see endpointBarEligible). On
+// non-bar endpoints we WANT the natural straight arrival so simple wires
+// take simple paths instead of looping around for an unnecessary bend.
 const STUB_PRESERVE_COST = BEND_COST + 1;
+
+
+/**
+ * Predict whether `ep` will receive a current bar after the next render.
+ * Used to decide which endpoints get the long bar-fitting stub vs. the
+ * short breathing-room stub.
+ *
+ *   - Junction endpoint:  eligible iff at least 2 other wires already
+ *                         touch the junction in state.wires. The wire being
+ *                         routed right now is NOT yet committed to
+ *                         state.wires, so counting ≥2 here predicts ≥3
+ *                         after commit — which is the bar planner's actual
+ *                         gate. False positives (the routed wire turns out
+ *                         to be the second, not the third) only cost a
+ *                         longer-than-needed stub, no visual bug.
+ *   - Component terminal: eligible iff the component is a bar-emitting
+ *                         type. ANY terminal qualifies, not just the
+ *                         rightmost-x one. The bar planner prefers the
+ *                         rightmost terminal but falls back to the other
+ *                         terminal when the rightmost wire is already
+ *                         claimed (e.g. shared with an upstream component
+ *                         in a series loop). If only the rightmost side
+ *                         got the long stub, the fallback bar would
+ *                         silently fail to render because computeBarGeom
+ *                         bails on segments shorter than BAR_FOOTPRINT.
+ *                         The cost of being symmetric is a slightly longer
+ *                         stub on the side that doesn't end up with a bar
+ *                         (~92 px), which is well worth a guaranteed bar.
+ *
+ * @param {{compId?:string,term?:string,junctionId?:string}} ep
+ * @returns {boolean}
+ */
+function endpointBarEligible(ep) {
+  if (!ep) return false;
+
+  if (ep.junctionId) {
+    let degree = 0;
+    for (const w of state.wires) {
+      if (w.a.junctionId === ep.junctionId || w.b.junctionId === ep.junctionId) {
+        degree++;
+        if (degree >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  if (!ep.compId) return false;
+  const comp = state.components.find(c => c.id === ep.compId);
+  if (!comp || !COMP_BAR_TYPES.has(comp.type)) return false;
+
+  // Both terminals get the long stub on bar-emitting components — the bar
+  // planner can claim either side and we need space reserved on whichever
+  // it picks. See the rationale block above.
+  return true;
+}
 
 // Public API ------------------------------------------------------------
 
@@ -65,10 +143,16 @@ export function route(source, target, opts = {}) {
   const obstacles = opts.obstacles || collectComponentBoxes(excludeComps);
   const wireSegs = opts.wireSegs || collectWireSegments(excludeWires);
 
-  // Force the same stub length on every endpoint (including junctions) so
-  // each wire has room for a current-readout bar before any 90° bend.
-  const srcStubLen = STUB;
-  const tgtStubLen = STUB;
+  // Stub length depends on whether the endpoint will display a current
+  // bar. Bar-eligible endpoints reserve BAR_FOOTPRINT-sized room so the
+  // bar can actually render (see endpointBarEligible / STUB_BAR comments).
+  // Non-bar endpoints get a much shorter stub so simple wires take simple
+  // paths instead of being forced to walk 100+ px in their exit cardinal
+  // before they can bend.
+  const srcBarEligible = endpointBarEligible(source);
+  const tgtBarEligible = endpointBarEligible(target);
+  const srcStubLen = srcBarEligible ? STUB_BAR : STUB_PLAIN;
+  const tgtStubLen = tgtBarEligible ? STUB_BAR : STUB_PLAIN;
   const srcStub = advance(srcPt, srcDir, srcStubLen);
   const tgtStub = advance(tgtPt, tgtDir, tgtStubLen);
 
@@ -113,12 +197,25 @@ export function route(source, target, opts = {}) {
     // and target). Forcing a detour here would route the wire across other
     // wires for no payoff. Detected by comparing srcStub and tgtStub on the
     // shared coordinate of one or both stub-axes.
+    //
+    // Also suppress on endpoints that won't display a current bar: there's
+    // nothing to make room for, so forcing a corner at the stub end just
+    // produces gratuitous turns (Issue 2 in the wiring fix work).
+    //
+    // Also suppress on junction endpoints regardless of bar-eligibility:
+    // junctions have no component body the wire could cut through, so the
+    // stub-preserve corner is pure overhead. The bar (if any) still has
+    // room because srcStub/tgtStub are pre-advanced by STUB_BAR before A*
+    // even runs — that reserves the geometry; the preserve-cost penalty
+    // only enforces a turn there, which junctions don't need.
     const stubsCollinear = srcStub && tgtStub && (
       ((srcDir === 'E' || srcDir === 'W') && (tgtDir === 'E' || tgtDir === 'W') && srcStub.y === tgtStub.y) ||
       ((srcDir === 'N' || srcDir === 'S') && (tgtDir === 'N' || tgtDir === 'S') && srcStub.x === tgtStub.x)
     );
-    const ssArg = stubsCollinear ? null : srcStub;
-    const tsArg = stubsCollinear ? null : tgtStub;
+    const srcIsJunction = !!source.junctionId;
+    const tgtIsJunction = !!target.junctionId;
+    const ssArg = (stubsCollinear || !srcBarEligible || srcIsJunction) ? null : srcStub;
+    const tsArg = (stubsCollinear || !tgtBarEligible || tgtIsJunction) ? null : tgtStub;
     for (const nb of neighbors(cur, xArr, yArr, xIdx, yIdx, obstacles)) {
       const step = edgeCost(cur, nb, wireSegs, obstacles, prevSet,
         ssArg, srcDir, tsArg, tgtDir);
@@ -242,6 +339,10 @@ function simplify(pts) {
 // For each interior orthogonal segment, if it exactly overlaps an existing
 // wire segment, try shifting it by +/- LANE_STEP. We leave the neighbouring
 // stubs anchored so the endpoints never move.
+//
+// Guard: skip the shift if either adjacent leg (prev→a or b→next) would
+// become shorter than MIN_LEG_AFTER_NUDGE. Below ~2×CORNER_R the rounded
+// corners on each side overlap and the bend visually folds into a "kink".
 function nudgeLanes(pts, wireSegs, obstacles) {
   if (pts.length < 4) return pts;
   const out = pts.map(p => ({ x: p.x, y: p.y }));
@@ -254,6 +355,16 @@ function nudgeLanes(pts, wireSegs, obstacles) {
       const na = horiz ? { x: a.x, y: a.y + shift } : { x: a.x + shift, y: a.y };
       const nb = horiz ? { x: b.x, y: b.y + shift } : { x: b.x + shift, y: b.y };
       const prev = out[i - 1], next = out[i + 2];
+
+      // After the shift the adjacent legs change length: prev→a along
+      // the perpendicular axis grows or shrinks by |shift|, same for
+      // b→next. Reject the shift if either leg would collapse below the
+      // anti-kink threshold.
+      const legPrev = Math.abs(prev.x - na.x) + Math.abs(prev.y - na.y);
+      const legNext = Math.abs(next.x - nb.x) + Math.abs(next.y - nb.y);
+      if (legPrev < MIN_LEG_AFTER_NUDGE) continue;
+      if (legNext < MIN_LEG_AFTER_NUDGE) continue;
+
       const okA = !segCrossesObstacle(prev, na, obstacles);
       const okB = !segCrossesObstacle(nb, next, obstacles);
       const okMid = !segCrossesObstacle(na, nb, obstacles);

@@ -223,7 +223,10 @@ test('reroute stability: re-running yields the same path', () => {
 test('svg path is non-empty and starts with M', () => {
   const d = toSvgPath([{ x: 10, y: 10 }, { x: 50, y: 10 }, { x: 50, y: 50 }]);
   assert(d.startsWith('M '), 'starts with M');
-  assert(d.includes('Q '), 'rounded corner');
+  // Path uses an SVG arc (A) command for each rounded corner — a true
+  // quarter-circle. (Earlier versions used a quadratic bezier `Q`, which
+  // visibly bowed away from a real arc at the radius we draw.)
+  assert(d.includes(' A '), 'rounded corner');
 });
 
 log('', '');
